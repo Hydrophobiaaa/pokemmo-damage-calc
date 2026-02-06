@@ -41,6 +41,7 @@ export declare namespace State {
         isMagicRoom?: boolean;
         isWonderRoom?: boolean;
         isGravity?: boolean;
+        isMudSport?: boolean;
         isAuraBreak?: boolean;
         isFairyAura?: boolean;
         isDarkAura?: boolean;
@@ -72,5 +73,6 @@ export declare namespace State {
         isBattery?: boolean;
         isPowerSpot?: boolean;
         isSwitching?: 'out' | 'in';
+        isFollowMe?: Boolean;
     }
 }

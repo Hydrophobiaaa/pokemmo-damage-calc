@@ -85,6 +85,7 @@ var Pokemon = (function () {
         this.originalCurHP = curHP && curHP <= this.rawStats.hp ? curHP : this.rawStats.hp;
         this.status = options.status || '';
         this.toxicCounter = options.toxicCounter || 0;
+        this.isRaidBoss = options.isRaidBoss || false;
         this.moves = options.moves || [];
     }
     Pokemon.prototype.maxHP = function (original) {
@@ -193,6 +194,7 @@ var Pokemon = (function () {
             status: this.status,
             teraType: this.teraType,
             toxicCounter: this.toxicCounter,
+            isRaidBoss: this.isRaidBoss,
             moves: this.moves.slice(),
             overrides: this.species
         });

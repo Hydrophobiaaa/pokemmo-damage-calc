@@ -156,6 +156,7 @@
                     <label>Type</label>
                     <select aria-label="type1" class="type1 terrain-trigger calc-trigger"></select>
                     <select aria-label="type2" class="type2 terrain-trigger calc-trigger"></select>
+                    <small class="right raid-mode">Raid Boss:<input type="checkbox" title="Raid" class="raidBossToggle calc-trigger"/> </small>
                     <!-- <small class="right">(<a class="analysis links-lighten" target="_blank" href="">Smogon&nbsp;analysis</a>)</small> -->
                 </div>
                 <div class="gen-specific g9">
@@ -430,6 +431,18 @@
                             <td><span class="totalMod">---</span>
                             </td>
                         </tr>
+                        <tr class="ev-total-row gen-specific g3 g4 g5 g6 g7 g8 g9">
+                            <th></th>
+                            <td></td>
+                            <td class="gen-specific g3 g4 g5 g6 g7 g8 g9"></td>
+                            <!-- EV column -->
+                            <td class="gen-specific g3 g4 g5 g6 g7 g8 g9" style="font-size:.85em;padding-top:.25em;">
+                                <span class="ev-sum" >0/510</span>
+                            </td>
+                            <td class="gen-specific g1 g2 hide"></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -692,12 +705,14 @@
         <div aria-label="Field information" role="region">
             <fieldset class="field-info">
                 <legend align="center">Field</legend>
-                <div aria-labelledby="selectBattleFormatInstruction" class="gen-specific g3 g4 g5 g6 g7 g8 g9" role="radiogroup" style="width: 10.6em; margin: 0 auto 5px;" title="Select the battle format.">
+                <div aria-labelledby="selectBattleFormatInstruction" class="gen-specific g3 g4 g5 g6 g7 g8 g9" role="radiogroup" style="width: 16.6em; margin: 0 auto 5px;" title="Select the battle format.">
                     <span class="visually-hidden" id="selectBattleFormatInstruction">Select the battle format.</span>
                     <input class="visually-hidden calc-trigger" type="radio" name="format" value="Singles" id="singles-format" />
                     <label class="btn btn-left" for="singles-format">Singles</label>
                     <input class="visually-hidden calc-trigger" type="radio" name="format" value="Doubles" id="doubles-format" />
-                    <label class="btn btn-right" for="doubles-format">Doubles</label>
+                    <label class="btn btn-mid" for="doubles-format">Doubles</label>
+                    <input class="visually-hidden calc-trigger" type="radio" name="format" value="Raid" id="raid-format" />
+                    <label class="btn btn-right" for="raid-format">Raid</label>
                 </div>
                 <div aria-labelledby="selectDefaultLevelInstruction" role="radiogroup" style="margin: auto auto 5px;" title="Select the default level.">
                    <span class="visually-hidden" id="selectDefaultLevelInstruction">Select the default level.</span>
@@ -777,10 +792,13 @@
                     <input aria-describedby="wonderRoomInstruction" class="visually-hidden calc-trigger" type="checkbox" id="wonderroom" />
                     <label class="btn btn-xxxwide btn-right" for="wonderroom">Wonder Room</label>
                 </div>
-                <div class="gen-specific g4 g5 g6 g7 g8 g9" style="width: 5.3em; margin: 5px auto;" title="Is gravity in effect?">
+                <div class="gen-specific g4 g5 g6 g7 g8 g9" style="width: 16.2em; margin: 5px auto; display: inline-block;" title="Are there Field modifiers?">
                     <span hidden id="gravityInstruction">Is gravity in effect?</span>
                     <input aria-describedby="gravityInstruction" class="visually-hidden calc-trigger" type="checkbox" id="gravity" />
-                    <label class="btn" for="gravity">Gravity</label>
+                    <label class="btn btn-left" for="gravity">Gravity</label>
+                    <span hidden id="mudSportInstruction">Is Mud Sport in effect?</span>
+                    <input aria-describedby="mudSportInstruction" class="visually-hidden calc-trigger" type="checkbox" id="mudSport" />
+                    <label class="btn  btn-wide btn-right" for="mudSport">Mud Sport</label>
                 </div>
                 <hr class="gen-specific g2 g3 g4 g5 g6 g7 g8 g9" />
                 <table class="field">
@@ -1023,6 +1041,17 @@
                                 <label class="btn btn-xxwide" for="switchingR">Switching Out</label>
                             </div></td>
                         </tr>
+                        <tr class="raid-mode">
+                            <td><div class="left" title="Has this Pok&eacute;mon's defense being altered due to follow me? Raid Only">
+                                <div hidden id="selectFollowMeInstruction">Has this Pok&eacute;mon's defense being altered due to follow me? Raids only</div>
+                                <input aria-describedby="selectFollowMeInstruction" class="visually-hidden calc-trigger" type="checkbox" id="followMeL" />
+                                <label class="btn btn-xxwide" for="followMeL">Follow Me</label>
+                            </div></td>
+                            <td><div class="right" title="Has this Pok&eacute;mon's defense being altered due to follow me? Raid Only">
+                                <input aria-describedby="selectFollowMeInstruction" class="visually-hidden calc-trigger" type="checkbox" id="followMeR" />
+                                <label class="btn btn-xxwide" for="followMeR">Follow Me</label>
+                            </div></td>
+                        </tr>
                         <tr>
                             <td><div class="left" title="Export the leftmost Pok&eacute;mon set">
                                 <button id="exportL">Export</button>
@@ -1061,6 +1090,7 @@
                     <label>Type</label>
                     <select aria-label="Type 1" class="type1 terrain-trigger calc-trigger"></select>
                     <select aria-label="Type 2" class="type2 terrain-trigger calc-trigger"></select>
+                    <small class="right raid-mode">Raid Boss:<input type="checkbox" title="Raid" class="raidBossToggle calc-trigger"/> </small>
                     <!-- <small class="right">(<a class="analysis links-lighten" target="_blank" href="">Smogon&nbsp;analysis</a>)</small> -->
                 </div>
                 <div class="gen-specific g9">
@@ -1330,6 +1360,18 @@
                             </td>
                             <td><span class="totalMod">---</span>
                             </td>
+                        </tr>
+                        <tr class="ev-total-row gen-specific g3 g4 g5 g6 g7 g8 g9">
+                            <th></th>
+                            <td></td>
+                            <td class="gen-specific g3 g4 g5 g6 g7 g8 g9"></td>
+                            <!-- EV column -->
+                            <td class="gen-specific g3 g4 g5 g6 g7 g8 g9" style="font-size:.85em;padding-top:.25em;">
+                                <span class="ev-sum">0/510</span>
+                            </td>
+                            <td class="gen-specific g1 g2 hide"></td>
+                            <td></td>
+                            <td></td>
                         </tr>
                     </tbody>
                 </table>

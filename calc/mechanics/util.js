@@ -55,7 +55,7 @@ function isGrounded(pokemon, field) {
             !pokemon.hasItem('Air Balloon')));
 }
 exports.isGrounded = isGrounded;
-function getModifiedStat(stat, mod, gen) {
+function getModifiedStat(stat, mod, gen, isRaidBoss) {
     if (gen && gen.num < 3) {
         if (mod >= 0) {
             var pastGenBoostTable = [1, 1.5, 2, 2.5, 3, 3.5, 4];
@@ -84,6 +84,23 @@ function getModifiedStat(stat, mod, gen) {
         [7, 2],
         [8, 2],
     ];
+    if (isRaidBoss) {
+        modernGenBoostTable = [
+            [10, 17],
+            [10, 16],
+            [10, 15],
+            [10, 14],
+            [10, 13],
+            [10, 12],
+            [2, 2],
+            [3, 2],
+            [4, 2],
+            [5, 2],
+            [6, 2],
+            [7, 2],
+            [8, 2],
+        ]
+    }
     stat = OF16(stat * modernGenBoostTable[6 + mod][numerator]);
     stat = Math.floor(stat / modernGenBoostTable[6 + mod][denominator]);
     return stat;
@@ -535,13 +552,17 @@ function isQPActive(pokemon, field) {
         (pokemon.boostedStat !== 'auto'));
 }
 exports.isQPActive = isQPActive;
-function getFinalDamage(baseAmount, i, effectiveness, isBurned, stabMod, finalMod, protect) {
+function getFinalDamage(baseAmount, i, effectiveness, isBurned, stabMod, finalMod, protect, isRaidBoss) {
     var damageAmount = Math.floor(OF32(baseAmount * (85 + i)) / 100);
     if (stabMod !== 4096)
         damageAmount = OF32(damageAmount * stabMod) / 4096;
     damageAmount = Math.floor(OF32(pokeRound(damageAmount) * effectiveness));
     if (isBurned)
-        damageAmount = Math.floor(damageAmount / 2);
+        if (isRaidBoss) {
+            damageAmount = Math.floor((damageAmount  / 6)  * 5 );
+        }else {
+            damageAmount = Math.floor(damageAmount / 2);
+        }
     if (protect)
         damageAmount = pokeRound(OF32(damageAmount * 1024) / 4096);
     return OF16(pokeRound(Math.max(1, OF32(damageAmount * finalMod) / 4096)));

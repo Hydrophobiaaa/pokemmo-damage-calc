@@ -767,6 +767,12 @@ function buildDescription(description, attacker, defender) {
     if (description.isWonderRoom) {
         output += ' in Wonder Room';
     }
+    if (description.isFollowMe) {
+        output += ' Follow Me 1.5x ';
+    }
+    if (description.isMudSport) {
+        output += ' MudSport 1/3 ';
+    }
     return output;
 }
 function getDescriptionLevels(attacker, defender) {

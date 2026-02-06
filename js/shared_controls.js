@@ -92,6 +92,7 @@ function validate(obj, min, max) {
 
 $("input:radio[name='format']").change(function () {
 	var gameType = $("input:radio[name='format']:checked").val();
+	$(".raid-mode").toggle(gameType === 'Raid');
 	if (gameType === 'Singles') {
 		$("input:checkbox[name='ruin']:checked").prop("checked", false);
 	}
@@ -1117,6 +1118,7 @@ function createPokemon(pokeInfo) {
 			curHP: curHP,
 			status: CALC_STATUS[pokeInfo.find(".status").val()],
 			toxicCounter: status === 'Badly Poisoned' ? ~~pokeInfo.find(".toxic-counter").val() : 0,
+			isRaidBoss: pokeInfo.find(".raidBossToggle").is(":checked") || false,
 			moves: [
 				getMoveDetails(pokeInfo.find(".move1"), opts),
 				getMoveDetails(pokeInfo.find(".move2"), opts),
@@ -1177,6 +1179,7 @@ function createField() {
 	var isMagicRoom = $("#magicroom").prop("checked");
 	var isWonderRoom = $("#wonderroom").prop("checked");
 	var isGravity = $("#gravity").prop("checked");
+	var isMudSport = $("#mudSport").prop("checked");
 	var isSR = [$("#srL").prop("checked"), $("#srR").prop("checked")];
 	var weather;
 	var spikes;
@@ -1207,6 +1210,7 @@ function createField() {
 	var isPowerSpot = [$("#powerSpotL").prop("checked"), $("#powerSpotR").prop("checked")];
 	// TODO: support switching in as well!
 	var isSwitchingOut = [$("#switchingL").prop("checked"), $("#switchingR").prop("checked")];
+	var isFollowMe = [$("#followMeL").prop("checked"), $("#followMeR").prop("checked")];
 
 	var createSide = function (i) {
 		return new calc.Side({
@@ -1215,12 +1219,13 @@ function createField() {
 			isReflect: isReflect[i], isLightScreen: isLightScreen[i],
 			isProtected: isProtected[i], isSeeded: isSeeded[i], isForesight: isForesight[i],
 			isTailwind: isTailwind[i], isHelpingHand: isHelpingHand[i], isFlowerGift: isFlowerGift[i], isFriendGuard: isFriendGuard[i],
-			isAuroraVeil: isAuroraVeil[i], isBattery: isBattery[i], isPowerSpot: isPowerSpot[i], isSwitching: isSwitchingOut[i] ? 'out' : undefined
+			isAuroraVeil: isAuroraVeil[i], isBattery: isBattery[i], isPowerSpot: isPowerSpot[i], isSwitching: isSwitchingOut[i] ? 'out' : undefined,
+			isFollowMe: isFollowMe[i]
 		});
 	};
 	return new calc.Field({
 		gameType: gameType, weather: weather, terrain: terrain,
-		isMagicRoom: isMagicRoom, isWonderRoom: isWonderRoom, isGravity: isGravity,
+		isMagicRoom: isMagicRoom, isWonderRoom: isWonderRoom, isGravity: isGravity, isMudSport: isMudSport,
 		isBeadsOfRuin: isBeadsOfRuin, isTabletsOfRuin: isTabletsOfRuin,
 		isSwordOfRuin: isSwordOfRuin, isVesselOfRuin: isVesselOfRuin,
 		attackerSide: createSide(0), defenderSide: createSide(1)
@@ -1684,3 +1689,43 @@ $("#mainResult").click(function () {
 		}, 1500);
 	});
 });
+
+(function () {
+	function computeEvTotal($panel) {
+		var total = 0;
+		$panel.find('input.evs').each(function () {
+			var v = parseInt($(this).val(), 10);
+			if (!isNaN(v)) total += v;
+		});
+		return total;
+	}
+
+	function applyEvTotal($panel) {
+		var total = computeEvTotal($panel);
+		var $sum = $panel.find('.ev-total-row .ev-sum');
+		if (!$sum.length) return;
+		$sum.text(total + '/510');
+		if (total > 510) $sum.css('color', 'red');
+		else if (total === 510) $sum.css('color', 'green');
+		else $sum.css('color', 'white');
+	}
+
+	function bindEvTotal(panelSelector) {
+		var $panel = $(panelSelector);
+		if (!$panel.length) return;
+
+		applyEvTotal($panel);
+		$(document).on('input change', panelSelector + ' input.evs', function () {
+			applyEvTotal($panel);
+		});
+		// catches imports/presets that update EV fields indirectly
+		$(document).on('change', panelSelector + ' .calc-trigger', function () {
+			applyEvTotal($panel);
+		});
+	}
+
+	$(function () {
+		bindEvTotal('#p1');
+		bindEvTotal('#p2');
+	});
+})();

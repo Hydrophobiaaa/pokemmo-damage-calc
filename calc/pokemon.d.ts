@@ -26,6 +26,7 @@ export declare class Pokemon implements State.Pokemon {
     originalCurHP: number;
     status: I.StatusName | '';
     toxicCounter: number;
+    isRaidBoss: boolean;
     moves: I.MoveName[];
     constructor(gen: I.Generation, name: string, options?: Partial<State.Pokemon> & {
         curHP?: number;

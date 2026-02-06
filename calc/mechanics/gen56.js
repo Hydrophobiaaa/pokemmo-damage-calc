@@ -139,6 +139,11 @@ function calculateBWXY(gen, attacker, defender, move, field) {
         ? (0, util_2.getMoveEffectiveness)(gen, move, defender.types[1], isGhostRevealed, field.isGravity)
         : 1;
     var typeEffectiveness = type1Effectiveness * type2Effectiveness;
+    //MudSport Terrain
+    if (field.isMudSport && move.hasType('Electric') && typeEffectiveness !== 0) {
+        typeEffectiveness /= 3;
+        desc.isMudSport = true;
+    }
     if (typeEffectiveness === 0 && move.named('Thousand Arrows')) {
         typeEffectiveness = 1;
     }
@@ -246,8 +251,7 @@ function calculateBWXY(gen, attacker, defender, move, field) {
     }
     var damage = [];
     for (var i = 0; i < 16; i++) {
-        damage[i] =
-            (0, util_2.getFinalDamage)(baseDamage, i, typeEffectiveness, applyBurn, stabMod, finalMod);
+        damage[i] = (0, util_2.getFinalDamage)(baseDamage, i, typeEffectiveness, applyBurn, stabMod, finalMod, null, attacker.isRaidBoss);
     }
     desc.attackBoost =
         move.named('Foul Play') ? defender.boosts[attackStat] : attacker.boosts[attackStat];
@@ -278,7 +282,7 @@ function calculateBWXY(gen, attacker, defender, move, field) {
             var newFinalMod = (0, util_2.chainMods)(newFinalMods, 41, 131072);
             var damageMultiplier = 0;
             damage = damage.map(function (affectedAmount) {
-                var newFinalDamage = (0, util_2.getFinalDamage)(newBaseDamage, damageMultiplier, typeEffectiveness, applyBurn, stabMod, newFinalMod);
+                var newFinalDamage = (0, util_2.getFinalDamage)(newBaseDamage, damageMultiplier, typeEffectiveness, applyBurn, stabMod, newFinalMod, null, attacker.isRaidBoss);
                 damageMultiplier++;
                 return affectedAmount + newFinalDamage;
             });
@@ -613,7 +617,7 @@ function calculateAttackBWXY(gen, attacker, defender, move, field, desc, isCriti
         desc.defenderAbility = defender.ability;
     }
     else {
-        attack = (0, util_2.getModifiedStat)(attackSource.rawStats[attackStat], attackSource.boosts[attackStat]);
+        attack = (0, util_2.getModifiedStat)(attackSource.rawStats[attackStat], attackSource.boosts[attackStat], null, attackSource.isRaidBoss);
         desc.attackBoost = attackSource.boosts[attackStat];
     }
     if (attacker.hasAbility('Hustle') && move.category === 'Physical') {
@@ -709,7 +713,7 @@ function calculateDefenseBWXY(gen, attacker, defender, move, field, desc, isCrit
         desc.attackerAbility = attacker.ability;
     }
     else {
-        defense = (0, util_2.getModifiedStat)(defender.rawStats[defenseStat], defender.boosts[defenseStat]);
+        defense = (0, util_2.getModifiedStat)(defender.rawStats[defenseStat], defender.boosts[defenseStat], null, defender.isRaidBoss);
         desc.defenseBoost = defender.boosts[defenseStat];
     }
     if (field.hasWeather('Sand') && defender.hasType('Rock') && !hitsPhysical) {
@@ -776,6 +780,7 @@ function calculateBaseDamageBWXY(gen, attacker, basePower, attack, defense, move
     var baseDamage = (0, util_2.getBaseDamage)(attacker.level, basePower, attack, defense);
     var isSpread = field.gameType !== 'Singles' &&
         ['allAdjacent', 'allAdjacentFoes'].includes(move.target);
+    // if (isSpread && !attacker.isRaidBoss) {  Confirm if spread moves from the boss doesn't get dropped on next raids.
     if (isSpread) {
         baseDamage = (0, util_2.pokeRound)((0, util_2.OF32)(baseDamage * 3072) / 4096);
     }
@@ -804,10 +809,12 @@ function calculateFinalModsBWXY(gen, attacker, defender, move, field, desc, isCr
     if (hitCount === void 0) { hitCount = 0; }
     var finalMods = [];
     if (field.defenderSide.isReflect && move.category === 'Physical' && !isCritical) {
+        //TODO: Confirm / Check - Alter Reflect based on defender.isRaidBoss
         finalMods.push(field.gameType !== 'Singles' ? (gen.num > 5 ? 2732 : 2703) : 2048);
         desc.isReflect = true;
     }
     else if (field.defenderSide.isLightScreen && move.category === 'Special' && !isCritical) {
+        //TODO: Confirm / Check - Alter Lightscreen based on defender.isRaidBoss
         finalMods.push(field.gameType !== 'Singles' ? (gen.num > 5 ? 2732 : 2703) : 2048);
         desc.isLightScreen = true;
     }
@@ -858,6 +865,11 @@ function calculateFinalModsBWXY(gen, attacker, defender, move, field, desc, isCr
         !attacker.hasAbility('Unnerve')) {
         finalMods.push(2048);
         desc.defenderItem = defender.item;
+    }
+    // Follow Me / Rage Powder style damage modifier (custom)
+    if (field.defenderSide.isFollowMe) {
+        finalMods.push(6144); // 1.5x
+        desc.isFollowMe = true;
     }
     return finalMods;
 }

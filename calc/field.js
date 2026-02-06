@@ -26,6 +26,7 @@ var Field = (function () {
         this.isMagicRoom = !!field.isMagicRoom;
         this.isWonderRoom = !!field.isWonderRoom;
         this.isGravity = !!field.isGravity;
+        this.isMudSport = !!field.isMudSport;
         this.isAuraBreak = field.isAuraBreak || false;
         this.isFairyAura = field.isFairyAura || false;
         this.isDarkAura = field.isDarkAura || false;
@@ -63,6 +64,7 @@ var Field = (function () {
             isMagicRoom: this.isMagicRoom,
             isWonderRoom: this.isWonderRoom,
             isGravity: this.isGravity,
+            isMudSport: this.isMudSport,
             attackerSide: this.attackerSide,
             defenderSide: this.defenderSide,
             isAuraBreak: this.isAuraBreak,
@@ -100,6 +102,7 @@ var Side = (function () {
         this.isBattery = !!side.isBattery;
         this.isPowerSpot = !!side.isPowerSpot;
         this.isSwitching = side.isSwitching;
+        this.isFollowMe = side.isFollowMe;
     }
     Side.prototype.clone = function () {
         return new Side(this);
