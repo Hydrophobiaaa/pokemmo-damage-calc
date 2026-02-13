@@ -357,7 +357,21 @@ function calculateBasePowerBWXY(gen, attacker, defender, move, field, hasAteAbil
             desc.moveBP = basePower;
             break;
         case 'Assurance':
+            var isAfterDamageD = field.defenderSide.isAfterDamage;
+            basePower = move.bp * (isAfterDamageD ? 2 : 1);
+            if (isAfterDamageD) {
+                desc.isAfterDamage = basePower;
+                break;
+            }
             basePower = move.bp * (defender.hasAbility('Parental Bond (Child)') ? 2 : 1);
+            desc.moveBP = basePower;
+            break;
+        case 'Avalanche':
+            var isAfterDamageA = field.attackerSide.isAfterDamage;
+            basePower = move.bp * (isAfterDamageA ? 2 : 1);
+            if (isAfterDamageA) {
+                desc.isAfterDamage = basePower;
+            }
             break;
         case 'Wake-Up Slap':
             basePower = move.bp * (defender.hasStatus('slp') ? 2 : 1);

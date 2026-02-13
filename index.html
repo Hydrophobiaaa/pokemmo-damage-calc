@@ -83,6 +83,8 @@
             <input class="mode visually-hidden" type="radio" name="mode" id="oms" /><label class="btn btn-right btn-xwide" for="oms">Other Metagames</label>
         </span> -->
     </div>
+    <small class="right">(<a class="links-lighten" target="_self" href="raidalculate.html">raidalculate</a>)</small>
+
     <hr />
     <div aria-label="Move selection" class="move-result-group" role="region" title="Select a move to show detailed results.">
         <div  aria-labelledby="resultHeaderL" class="move-result-subgroup" role="radiogroup">
@@ -1041,6 +1043,17 @@
                                 <label class="btn btn-xxwide" for="switchingR">Switching Out</label>
                             </div></td>
                         </tr>
+                        <tr class="not-singles gen-specific g2 g3 g4 g5 g6 g7 g8 g9">
+                            <td><div class="left" title="Did defending Pok&eacute; take damage this turn?">
+                                <div hidden id="selectTookDamageInstruction">Did defending Pok&eacute;mon take damage this turn?</div>
+                                <input aria-describedby="selectTookDamageInstruction" class="visually-hidden calc-trigger" type="checkbox" id="tookDamageL" />
+                                <label class="btn btn-xxwide" for="tookDamageL">Took Damage</label>
+                            </div></td>
+                            <td><div class="right" title="Did defending Pok&eacute; take damage this turn?">
+                                <input aria-describedby="selectTookDamageInstruction" class="visually-hidden calc-trigger" type="checkbox" id="tookDamageR" />
+                                <label class="btn btn-xxwide" for="tookDamageR">Took Damage</label>
+                            </div></td>
+                        </tr>
                         <tr class="raid-mode">
                             <td><div class="left" title="Has this Pok&eacute;mon's defense being altered due to follow me? Raid Only">
                                 <div hidden id="selectFollowMeInstruction">Has this Pok&eacute;mon's defense being altered due to follow me? Raids only</div>
@@ -1679,7 +1692,7 @@
     <script type="text/javascript" src="js/moveset_import.js?988db89f"></script>
 </div>
 
-<div class="credits">Created by Honko, maintained by Austin and Kris. Updated for PokeMMO by c4v with help from Nevari.
+<div class="credits">Created by Honko, maintained by Austin and Kris. Updated for PokeMMO by c4v with help from Nevari and Veldmuus.
     <!-- <ul><li><a href="https://github.com/smogon/damage-calc/contributors" class="links-lighten" target="_blank">Contributors</a></li>
     <li><a href="https://www.smogon.com/forums/threads/pok%C3%A9mon-showdown-damage-calculator.3593546/" class="links-lighten" target="_blank">Bug Reports</a></li>
     <li><a href="https://github.com/smogon/damage-calc" class="links-lighten" target="_blank">GitHub repository</a></li></ul> -->

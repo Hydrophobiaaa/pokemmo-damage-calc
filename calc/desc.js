@@ -694,6 +694,9 @@ function buildDescription(description, attacker, defender) {
     if (description.isSwitching) {
         output += 'switching boosted ';
     }
+    if (description.isAfterDamage){
+        output += 'After Damage boosted ';
+    }
     output += description.moveName + ' ';
     if (description.moveBP && description.moveType) {
         output += '(' + description.moveBP + ' BP ' + description.moveType + ') ';

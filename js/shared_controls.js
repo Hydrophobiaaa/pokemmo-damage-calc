@@ -93,6 +93,7 @@ function validate(obj, min, max) {
 $("input:radio[name='format']").change(function () {
 	var gameType = $("input:radio[name='format']:checked").val();
 	$(".raid-mode").toggle(gameType === 'Raid');
+	$(".not-singles").toggle(gameType !== 'Singles');
 	if (gameType === 'Singles') {
 		$("input:checkbox[name='ruin']:checked").prop("checked", false);
 	}
@@ -1210,6 +1211,7 @@ function createField() {
 	var isPowerSpot = [$("#powerSpotL").prop("checked"), $("#powerSpotR").prop("checked")];
 	// TODO: support switching in as well!
 	var isSwitchingOut = [$("#switchingL").prop("checked"), $("#switchingR").prop("checked")];
+	var isAfterDamage = [$("#tookDamageL").prop("checked"), $("#tookDamageR").prop("checked")];
 	var isFollowMe = [$("#followMeL").prop("checked"), $("#followMeR").prop("checked")];
 
 	var createSide = function (i) {
@@ -1220,7 +1222,7 @@ function createField() {
 			isProtected: isProtected[i], isSeeded: isSeeded[i], isForesight: isForesight[i],
 			isTailwind: isTailwind[i], isHelpingHand: isHelpingHand[i], isFlowerGift: isFlowerGift[i], isFriendGuard: isFriendGuard[i],
 			isAuroraVeil: isAuroraVeil[i], isBattery: isBattery[i], isPowerSpot: isPowerSpot[i], isSwitching: isSwitchingOut[i] ? 'out' : undefined,
-			isFollowMe: isFollowMe[i]
+			isAfterDamage: isAfterDamage[i] ,isFollowMe: isFollowMe[i]
 		});
 	};
 	return new calc.Field({

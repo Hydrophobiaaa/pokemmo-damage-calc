@@ -73,6 +73,7 @@ export declare namespace State {
         isBattery?: boolean;
         isPowerSpot?: boolean;
         isSwitching?: 'out' | 'in';
+        isAfterDamage?: boolean;
         isFollowMe?: Boolean;
     }
 }
