@@ -920,6 +920,7 @@ function placeBsBtn() {
     $(".raid-calc-btn").off("click.raidalculate").on("click.raidalculate", async function () {
         // 1) selected target
         var selected;
+        var field = createField()
         try {
             selected = createPokemon($("#p1"));
         } catch (e) {
@@ -940,7 +941,14 @@ function placeBsBtn() {
             var row = typeChart[atk];
             if (!row) return 1;
             var m = row[def];
-            return (typeof m === "number") ? m : 1;
+            m = (typeof m === "number") ? m : 1;
+
+            // Inverse typing: invert each per-type multiplier
+            if (field.isInverseTypes) {
+                if (m === 0) m = 2;
+                else if (m !== 1) m = 1 / m; // 2<->0.5, 4<->0.25, etc
+            }
+            return m;
         }
 
         function effVs(atk, defs) {

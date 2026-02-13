@@ -139,6 +139,18 @@ function calculateBWXY(gen, attacker, defender, move, field) {
         ? (0, util_2.getMoveEffectiveness)(gen, move, defender.types[1], isGhostRevealed, field.isGravity)
         : 1;
     var typeEffectiveness = type1Effectiveness * type2Effectiveness;
+    // Inverse Typing (custom mechanic): invert type-chart effectiveness (immunities become super-effective)
+    if (field.isInverseTypes) {
+        var invert = function (m) {
+            if (m === 0) return 2;
+            if (m === 1) return 1;
+            return 1 / m;
+        };
+        type1Effectiveness = invert(type1Effectiveness);
+        type2Effectiveness = invert(type2Effectiveness);
+        typeEffectiveness = type1Effectiveness * type2Effectiveness;
+        desc.isInverseTypes = true;
+    }
     //MudSport Terrain
     if (field.isMudSport && move.hasType('Electric') && typeEffectiveness !== 0) {
         typeEffectiveness /= 3;
@@ -222,6 +234,13 @@ function calculateBWXY(gen, attacker, defender, move, field) {
     if (move.hits > 1) {
         desc.hits = move.hits;
     }
+
+    if (field.isInverseMoves && move.category !== 'Status') {
+        move.category = move.category === 'Physical' ? 'Special' : 'Physical';
+        desc.isInverseMoves = true;
+        desc.moveCategory = move.category;
+    }
+
     var basePower = calculateBasePowerBWXY(gen, attacker, defender, move, field, hasAteAbilityTypeChange, desc);
     if (basePower === 0) {
         return result;

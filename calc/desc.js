@@ -697,6 +697,9 @@ function buildDescription(description, attacker, defender) {
     if (description.isAfterDamage){
         output += 'After Damage boosted ';
     }
+    if (description.isInverseMoves) {
+        output += ' inverse Moves ';
+    }
     output += description.moveName + ' ';
     if (description.moveBP && description.moveType) {
         output += '(' + description.moveBP + ' BP ' + description.moveType + ') ';
@@ -768,7 +771,10 @@ function buildDescription(description, attacker, defender) {
         output += ' on a critical hit';
     }
     if (description.isWonderRoom) {
-        output += ' in Wonder Room';
+        output += ' in Wonder Room ';
+    }
+    if (description.isInverseTypes) {
+        output += ' inverse Types ';
     }
     if (description.isFollowMe) {
         output += ' Follow Me 1.5x ';
