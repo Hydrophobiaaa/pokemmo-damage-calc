@@ -519,6 +519,9 @@ function performCalculations() {
                 }
                 raidApplyPresetEVs(attacker);
 
+                //Make sure we're also the same level.
+                attacker.level = defender.level;
+
                 // Rebuild so stats update from nature + ev changes
                 attacker = raidRebuildPokemon(attacker);
 
