@@ -1009,7 +1009,6 @@ function placeBsBtn() {
                 if (moveName === "Fling") bp = 130;
                 else if (moveName === "Assurance") bp = 120;
                 else if (moveName === "Brine" && percent < 50) bp = bp * 2
-                console.log(selected);
 
                 if (bp <= 0) continue;
 
