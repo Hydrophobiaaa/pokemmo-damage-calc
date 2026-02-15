@@ -21,6 +21,7 @@ function raidUniq(arr) {
     return Array.from(new Set((arr || []).filter(Boolean)));
 }
 
+
 function raidGetTargetSpeed() {
     // Prefer cached target speed from last Raidalculate run
     if (RAID_LAST && typeof RAID_LAST.targetSpeed === "number" && !isNaN(RAID_LAST.targetSpeed)) return RAID_LAST.targetSpeed;
@@ -115,12 +116,23 @@ function raidIndexMonsters(monstersArr) {
         var atk = Number(stats.attack) || 0;
         var spa = Number(stats.sp_attack) || 0;
 
+        // evolutions in monsters.json are objects like { id, name, type, val }
+        var evolutions = [];
+        if (m && Array.isArray(m.evolutions)) {
+            for (var ei = 0; ei < m.evolutions.length; ei++) {
+                var en = raidNormName(m.evolutions[ei] && m.evolutions[ei].name);
+                if (en) evolutions.push(en);
+            }
+            evolutions = raidUniq(evolutions);
+        }
+
         idx[name] = {
             name: name,
             types: types,
             stats: {atk: atk, spa: spa},
             learnset: raidBuildLearnset(m),
             abilities: raidBuildAbilities(m),
+            evolutions: evolutions,
             obtainable: !!m.obtainable,
         };
     }
@@ -150,6 +162,7 @@ async function raidEnsureMonstersLoaded() {
                     stats: {atk: mon.stats.atk || 0, spa: mon.stats.spa || 0},
                     learnset: new Set(Array.from(mon.learnset || [])),
                     abilities: (mon.abilities || []).slice(),
+                    evolutions: (mon.evolutions || []).slice(),
                     obtainable: mon.obtainable,
                 };
             } else {
@@ -167,8 +180,47 @@ async function raidEnsureMonstersLoaded() {
                 existing.obtainable = existing.obtainable && mon.obtainable
                 // merge abilities
                 existing.abilities = raidUniq((existing.abilities || []).concat(mon.abilities || []));
+                // merge evolutions
+                existing.evolutions = raidUniq((existing.evolutions || []).concat(mon.evolutions || []));
             }
         }
+
+        // Inherit base-form learnsets onto evolutions using monsters.json evolutions.
+        // Egg moves often live only on base forms in monsters.json; we want evolved forms to also be able to use them.
+        (function () {
+            if (!RAID_MON_INDEX || !RAID_MON_INDEX_RESOLVED) return;
+
+            // Build child->parent map from monsters.json evolution lists
+            var prevoMap = {};
+            for (var parentName in RAID_MON_INDEX) {
+                var parentMon = RAID_MON_INDEX[parentName];
+                if (!parentMon || !parentMon.evolutions || !parentMon.evolutions.length) continue;
+                var parentResolved = raidResolveSpeciesName(parentMon.name);
+                for (var ei = 0; ei < parentMon.evolutions.length; ei++) {
+                    var childResolved = raidResolveSpeciesName(parentMon.evolutions[ei]);
+                    if (!childResolved || !parentResolved) continue;
+                    if (!prevoMap[childResolved]) prevoMap[childResolved] = parentResolved;
+                }
+            }
+
+            // Propagate learnsets along prevoMap (handles multi-stage by repeating passes)
+            var changed = true;
+            var guard = 0;
+            while (changed && guard++ < 10) {
+                changed = false;
+                for (var child in prevoMap) {
+                    var parent = prevoMap[child];
+                    var cur = RAID_MON_INDEX_RESOLVED[child];
+                    var prev = RAID_MON_INDEX_RESOLVED[parent];
+                    if (!cur || !cur.learnset || !prev || !prev.learnset) continue;
+                    prev.learnset.forEach(function (mv) {
+                        var before = cur.learnset.size;
+                        cur.learnset.add(mv);
+                        if (cur.learnset.size !== before) changed = true;
+                    });
+                }
+            }
+        })();
         return true;
     } catch (e) {
         return false;
