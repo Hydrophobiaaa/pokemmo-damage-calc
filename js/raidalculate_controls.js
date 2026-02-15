@@ -1052,6 +1052,10 @@ function placeBsBtn() {
             for (var moveName in moves) {
                 var mv = moves[moveName];
                 if (!mv) continue;
+                //Exclusions for moves that make no sense in raid
+                if (moveName === "Focus Punch") continue;
+
+
                 if (getType(mv) !== wType) continue;
 
                 var bp = getBp(mv);
