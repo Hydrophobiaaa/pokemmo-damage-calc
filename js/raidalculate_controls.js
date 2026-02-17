@@ -1288,8 +1288,16 @@ function setLevel(lvl) {
     }, 1350);
 }
 
+function setStatus(status) {
+    $('#p1 .status').val(status);
+    $('#p1 .status').trigger('keyup')
+}
+
+
 $(".set-selector").change(function (e) {
     setLevel("100");
+    //Automatically set it to poisned so we get max dmg Hex
+    setStatus("Poisoned");
 });
 
 
