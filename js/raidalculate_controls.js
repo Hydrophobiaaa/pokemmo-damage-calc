@@ -1089,7 +1089,8 @@ function placeBsBtn() {
                 if (!mv) continue;
                 // Exclusions for moves that make no sense in raid
                 if (RAID_MOVE_EXCLUSIONS.indexOf(moveName) !== -1) continue;
-
+                // Conditional Ignore for DreamEater
+                if (selected.status !== "slp" && moveName === "Dream Eater") continue;
 
                 if (getType(mv) !== wType) continue;
 
@@ -1100,6 +1101,7 @@ function placeBsBtn() {
                 if (moveName === "Fling") bp = 130;
                 else if (moveName === "Assurance") bp = 120;
                 else if (moveName === "Brine" && percent < 50) bp = bp * 2
+                else if (selected.status && moveName === "Hex") bp = bp * 2
                 // Up the multihits to on average 3.1* for the ones that hit 5 times.
                 // https://bulbapedia.bulbagarden.net/wiki/Multistrike_move
                 if (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1 && mv.multihit[1] === 5) {
