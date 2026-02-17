@@ -152,9 +152,13 @@ function calculateBWXY(gen, attacker, defender, move, field) {
         desc.isInverseTypes = true;
     }
     //MudSport Terrain
-    if (field.isMudSport && move.hasType('Electric') && typeEffectiveness !== 0) {
-        typeEffectiveness /= 3;
+    if (field.isMudSport && move.hasType('Electric')) {
+        move.bp = move.bp /= 3;
         desc.isMudSport = true;
+    }
+    if (field.isWaterSport && move.hasType('Fire')) {
+        move.bp = move.bp /= 3;
+        desc.isWaterSport = true;
     }
     if (typeEffectiveness === 0 && move.named('Thousand Arrows')) {
         typeEffectiveness = 1;

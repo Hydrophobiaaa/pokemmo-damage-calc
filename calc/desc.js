@@ -780,7 +780,10 @@ function buildDescription(description, attacker, defender) {
         output += ' Follow Me 1.5x ';
     }
     if (description.isMudSport) {
-        output += ' MudSport 1/3 ';
+        output += ' Mud Sport 1/3 ';
+    }
+    if (description.isWaterSport) {
+        output += ' Water Sport 1/3 ';
     }
     return output;
 }

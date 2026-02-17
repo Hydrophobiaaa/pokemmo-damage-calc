@@ -10,6 +10,7 @@ export declare class Field implements State.Field {
     isInverseTypes: boolean;
     isGravity: boolean;
     isMudSport: boolean;
+    isWaterSport: boolean;
     isAuraBreak?: boolean;
     isFairyAura?: boolean;
     isDarkAura?: boolean;

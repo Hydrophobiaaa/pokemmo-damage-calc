@@ -1183,6 +1183,7 @@ function createField() {
 	var isInverseTypes = $("#inverseTyping").prop("checked");
 	var isGravity = $("#gravity").prop("checked");
 	var isMudSport = $("#mudSport").prop("checked");
+	var isWaterSport = $("#waterSport").prop("checked");
 	var isSR = [$("#srL").prop("checked"), $("#srR").prop("checked")];
 	var weather;
 	var spikes;
@@ -1230,7 +1231,7 @@ function createField() {
 	return new calc.Field({
 		gameType: gameType, weather: weather, terrain: terrain,
 		isMagicRoom: isMagicRoom, isWonderRoom: isWonderRoom, isInverseMoves: isInverseMoves, isInverseTypes: isInverseTypes,
-		isGravity: isGravity, isMudSport: isMudSport,
+		isGravity: isGravity, isMudSport: isMudSport, isWaterSport: isWaterSport,
 		isBeadsOfRuin: isBeadsOfRuin, isTabletsOfRuin: isTabletsOfRuin,
 		isSwordOfRuin: isSwordOfRuin, isVesselOfRuin: isVesselOfRuin,
 		attackerSide: createSide(0), defenderSide: createSide(1)

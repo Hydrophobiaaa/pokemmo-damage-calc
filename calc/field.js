@@ -29,6 +29,7 @@ var Field = (function () {
         this.isInverseTypes = !!field.isInverseTypes;
         this.isGravity = !!field.isGravity;
         this.isMudSport = !!field.isMudSport;
+        this.isWaterSport = !!field.isWaterSport;
         this.isAuraBreak = field.isAuraBreak || false;
         this.isFairyAura = field.isFairyAura || false;
         this.isDarkAura = field.isDarkAura || false;
@@ -69,6 +70,7 @@ var Field = (function () {
             isInverseTypes: this.isInverseTypes,
             isGravity: this.isGravity,
             isMudSport: this.isMudSport,
+            isWaterSport: this.isWaterSport,
             attackerSide: this.attackerSide,
             defenderSide: this.defenderSide,
             isAuraBreak: this.isAuraBreak,
