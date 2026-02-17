@@ -17,7 +17,10 @@ var RAID_MOVE_EXCLUSIONS = [
     "Shadow Strike",
     "V-create",
     "Blue Flare",
-    "Aero Blast"
+    "Aero Blast",
+    "Future Sight",
+    "Psycho Boost",
+    "Psystrike"
 ];
 
 // --- Raidalculate pokemon exclusions (obtainable but not usable) ---
@@ -433,32 +436,20 @@ function raidNormStatsObj(stats) {
     };
 }
 
-// Helper: extract numeric final stats from a calc.Pokemon (prefer API, normalize legacy keys)
-function raidExtractFinalStats(p) {
-    if (!p) return {hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0};
-    // Prefer methods/known numeric sources
-    var hp = 0;
-    try {
-        if (typeof p.maxHP === 'function') hp = p.maxHP();
-        else if (typeof p.curHP === 'number') hp = p.curHP;
-    } catch (e) {
-    }
-
-    // Other stats come from stats/rawStats; normalize legacy keys
-    var s = raidNormStatsObj(p.rawStats || p.stats);
-    // Ensure HP is not a broken value from legacy parsing
-    if (hp && hp > 0) s.hp = hp;
-    return s;
-}
-
 // Helper to rebuild a Pokemon so stats are recalculated after EV/nature/item/ability changes
 function raidRebuildPokemon(p) {
     if (!p) return p;
     var species = pokedex && pokedex[raidResolveSpeciesName(p.name)];
+
+    var abilityOn = false;
+    if (p.ability === "Plus" || p.ability === "Minus") {
+        abilityOn = true;
+    }
+
     return new calc.Pokemon(gen, p.name, {
         level: p.level || defaultLevel || 100,
         ability: p.ability || "",
-        abilityOn: true,
+        abilityOn: abilityOn,
         item: p.item || "",
         gender: p.gender || "N",
         nature: p.nature || "Hardy",
