@@ -595,6 +595,7 @@ function performCalculations() {
                 function bestItemForMoveLocal(mv) {
                     if (mv.name === "Acrobatics") return "Flying Gem";
                     if (mv.name === "Fling") return "Iron Ball";
+                    if (mv.name === "Volt Tackle" && attacker.name === "Pikachu") return "Light Ball"
                     if (RAID_FORCE_PRESET && RAID_FORCE_PRESET.item) return RAID_FORCE_PRESET.item;
                     var c = String(mv.category || "").toLowerCase();
                     if (c === "physical") return "Choice Band";
@@ -709,7 +710,7 @@ function performCalculations() {
     }
     table.rows.add(dataSet);
 
-// Apply move filter BEFORE draw
+    // Apply move filter BEFORE draw
     var cur = $('#raid-move-filter').val();
     if (cur) table.column(1).search('^' + raidEscapeRegex(cur) + '$', true, false);
     else table.column(1).search('');
