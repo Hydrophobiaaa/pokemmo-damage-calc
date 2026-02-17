@@ -4,7 +4,32 @@ var RAID_MON_INDEX = null;   // name -> { name, types:[..], stats:{atk,spa}, lea
 var RAID_MON_INDEX_RESOLVED = null; // resolvedName -> merged mon entry
 var RAID_LAST = null;        // last computed raidalculate result
 var RAID_FORCE_PRESET = null; // null | { item: 'Choice Band' | 'Choice Specs' }
+
 var RAID_SPEED_FILTER = ""; // "" | "faster" | "slower"
+
+// --- Raidalculate move exclusions ---
+var RAID_MOVE_EXCLUSIONS = [
+    "Focus Punch",
+    "Fusion Bolt",
+    "Paleo Wave",
+    "Bolt Strike",
+    "Shadow Force",
+    "Shadow Strike",
+    "V-create",
+    "Blue Flare",
+    "Aero Blast"
+];
+
+// --- Raidalculate pokemon exclusions (obtainable but not usable) ---
+var RAID_MON_EXCLUSIONS = [
+    "Zekrom",
+    "Giratina",
+    "Rayquaza",
+    "Mewtwo",
+    "Keldeo",
+    "Arceus",
+    "Lugia"
+];
 
 // --- Raidalculate per-row metadata for hover popups ---
 var RAID_ROW_META = {}; // raidKey -> { base, ivs, evs, stats }
@@ -1053,8 +1078,8 @@ function placeBsBtn() {
             for (var moveName in moves) {
                 var mv = moves[moveName];
                 if (!mv) continue;
-                //Exclusions for moves that make no sense in raid
-                if (moveName === "Focus Punch") continue;
+                // Exclusions for moves that make no sense in raid
+                if (RAID_MOVE_EXCLUSIONS.indexOf(moveName) !== -1) continue;
 
 
                 if (getType(mv) !== wType) continue;
@@ -1136,6 +1161,10 @@ function placeBsBtn() {
                 var mon = RAID_MON_INDEX_RESOLVED[monName];
                 if (!mon) continue;
                 if (mon.obtainable === false) continue;
+
+                // Remove Extra Obtainables like Zekrom
+                if (RAID_MON_EXCLUSIONS.indexOf(mon.name) !== -1) continue;
+
 
                 // must learn at least 1 picked move
                 var learnableAll = raidGetLearnableMovesForMon(monName, RAID_LAST.pickedMoves);
