@@ -595,7 +595,7 @@ function performCalculations() {
                 function bestItemForMoveLocal(mv) {
                     if (mv.name === "Acrobatics") return "Flying Gem";
                     if (mv.name === "Fling") return "Iron Ball";
-                    if (mv.name === "Volt Tackle" && attacker.name === "Pikachu") return "Light Ball"
+                    if (attacker.name === "Pikachu") return "Light Ball"
                     if (RAID_FORCE_PRESET && RAID_FORCE_PRESET.item) return RAID_FORCE_PRESET.item;
                     var c = String(mv.category || "").toLowerCase();
                     if (c === "physical") return "Choice Band";
