@@ -610,9 +610,13 @@ function performCalculations() {
                 var monInfo = RAID_MON_INDEX_RESOLVED ? RAID_MON_INDEX_RESOLVED[raidResolveSpeciesName(attacker.name)] : null;
                 var abilityCandidates = [];
                 if (attacker.ability) abilityCandidates.push(attacker.ability);
+                // abilities from monsters.json (extra pool / overrides)
+                // monsters.json abilities are objects like { id, name }
                 if (monInfo && monInfo.abilities && monInfo.abilities.length) {
                     for (var ai = 0; ai < monInfo.abilities.length; ai++) {
-                        if (abilityCandidates.indexOf(monInfo.abilities[ai]) === -1) abilityCandidates.push(monInfo.abilities[ai]);
+                        var aEntry = monInfo.abilities[ai];
+                        var aName2 = (typeof aEntry === "string") ? aEntry : (aEntry && aEntry.name ? aEntry.name : "");
+                        if (aName2 && abilityCandidates.indexOf(aName2) === -1) abilityCandidates.push(aName2);
                     }
                 }
                 if (!abilityCandidates.length) abilityCandidates.push(attacker.ability || "");
@@ -621,6 +625,8 @@ function performCalculations() {
                     if (mv.name === "Acrobatics") return "Flying Gem";
                     if (mv.name === "Fling") return "Iron Ball";
                     if (attacker.name === "Pikachu") return "Light Ball"
+                    if (attacker.ability === "Technician" && (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1 && mv.multihit[1] === 5)) return "Loaded Dice"
+
                     if (RAID_FORCE_PRESET && RAID_FORCE_PRESET.item) return RAID_FORCE_PRESET.item;
                     var c = String(mv.category || "").toLowerCase();
                     if (c === "physical") return "Choice Band";
@@ -652,6 +658,18 @@ function performCalculations() {
                         tmpAtk = raidRebuildPokemon(tmpAtk);
 
                         var moveObj = raidBuildMove(gen, mv.name);
+
+                        // Force hit count for multi-hit moves when relevant (Skill Link / Loaded Dice)
+                        if (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1) {
+                            var maxHits = Number(mv.multihit[1]) || 0;
+                            if (maxHits > 1) {
+                                if (tmpAtk.ability === "Skill Link") {
+                                    moveObj.hits = maxHits;
+                                } else if (tmpAtk.item === "Loaded Dice") {
+                                    moveObj.hits = maxHits - 1;
+                                }
+                            }
+                        }
                         var r = calc.calculate(gen, tmpAtk, defender, moveObj, field);
                         var range = r.range();
                         var maxDmg = range[1];
@@ -1091,6 +1109,11 @@ function placeBsBtn() {
                 if (moveName === "Fling") bp = 130;
                 else if (moveName === "Assurance") bp = 120;
                 else if (moveName === "Brine" && percent < 50) bp = bp * 2
+                // Up the multihits to on average 3.1* for the ones that hit 5 times.
+                // https://bulbapedia.bulbagarden.net/wiki/Multistrike_move
+                if (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1 && mv.multihit[1] === 5) {
+                    bp = bp * 3.1;
+                }
 
                 if (bp <= 0) continue;
 
@@ -1098,7 +1121,13 @@ function placeBsBtn() {
                 var catLc = cat.toLowerCase();
                 if (catLc === "status") continue;
 
-                var entry = {name: moveName, type: wType, category: cat || "Unknown", bp: bp};
+                var entry = {
+                    name: moveName,
+                    type: wType,
+                    category: cat || "Unknown",
+                    bp: bp,
+                    multihit: mv && mv.multihit ? mv.multihit : undefined
+                };
                 if (catLc === "physical") phys.push(entry);
                 else if (catLc === "special") spec.push(entry);
             }
