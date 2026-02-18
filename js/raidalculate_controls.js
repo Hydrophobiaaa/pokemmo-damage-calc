@@ -17,7 +17,7 @@ var RAID_MOVE_EXCLUSIONS = [
     "Shadow Strike",
     "V-create",
     "Blue Flare",
-    "Aero Blast",
+    "Aeroblast",
     "Future Sight",
     "Psycho Boost",
     "Psystrike"
@@ -1104,6 +1104,7 @@ function placeBsBtn() {
                 else if (moveName === "Assurance") bp = 120;
                 else if (moveName === "Brine" && percent < 50) bp = bp * 2
                 else if (selected.status && moveName === "Hex") bp = bp * 2
+                else if (selected.status && moveName === "Acrobatics") bp = bp * 2
                 // Up the multihits to on average 3.1* for the ones that hit 5 times.
                 // https://bulbapedia.bulbagarden.net/wiki/Multistrike_move
                 if (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1 && mv.multihit[1] === 5) {
