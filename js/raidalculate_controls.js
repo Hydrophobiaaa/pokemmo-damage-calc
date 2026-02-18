@@ -617,6 +617,8 @@ function performCalculations() {
                     if (mv.name === "Fling") return "Iron Ball";
                     if (attacker.name === "Pikachu") return "Light Ball"
                     if (attacker.ability === "Technician" && (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1 && mv.multihit[1] === 5)) return "Loaded Dice"
+                    if (mv.name === "Sky Attack") return "Power Herb"
+
 
                     if (RAID_FORCE_PRESET && RAID_FORCE_PRESET.item) return RAID_FORCE_PRESET.item;
                     var c = String(mv.category || "").toLowerCase();
