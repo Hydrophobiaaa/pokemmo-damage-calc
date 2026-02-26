@@ -460,6 +460,15 @@ function raidRebuildPokemon(p) {
     });
 }
 
+function raidUpdateBossMoveHeaders(defender) {
+    for (var j = 0; j < 4; j++) {
+        var m = defender && defender.moves && defender.moves[j];
+        var n = m && m.name ? m.name : '';
+        if (!n || n === '(No Move)') n = 'Boss Move ' + (j + 1);
+        var $th = $('th.boss-move-col[data-slot="' + j + '"]');
+        if ($th.length) $th.text(n);
+    }
+}
 
 $.fn.DataTable.ColVis.prototype._fnDomColumnButton = function (i) {
     var
@@ -552,6 +561,7 @@ function performCalculations() {
             if (!attacker) continue; // skip invalid species
             defender = createPokemon(pokeInfo);
             field.swap();
+            raidUpdateBossMoveHeaders(defender);
             if (attacker.ability === "Rivalry") {
                 attacker.gender = "N";
             }
@@ -712,20 +722,50 @@ function performCalculations() {
                     var attackerCell = '<span class="raid-mon" data-raidkey="' + raidEscHtml(raidKey) + '">' + raidEscHtml(displayName) + '</span>';
 
                     var data = [attackerCell];
+
                     // 1 Move
                     var moveLabel = String(mv.name).replace("Hidden Power", "HP");
                     data.push(moveLabel);
-                    // 2 Damage%
+
+                    // 2 Damage% (attacker -> boss)
                     data.push(minPercentage + " - " + maxPercentage + "%");
-                    // 3 Ability
+
+                    // 3 Ability (matches HTML order)
                     data.push(best.tmpAtk.ability || "");
-                    // 4 Speed
+
+                    // 4-7 Boss move damage% (boss -> attacker)
+                    for (var bi = 0; bi < 4; bi++) {
+                        var bm = defender && defender.moves && defender.moves[bi];
+                        var bmName = bm && bm.name ? bm.name : "";
+                        if (!bmName || bmName === "(No Move)") {
+                            data.push("");
+                            continue;
+                        }
+
+                        var bossMoveObj = raidBuildMove(gen, bmName);
+
+                        // swap perspective so boss is attacker
+                        field.swap();
+                        var br = calc.calculate(gen, defender, best.tmpAtk, bossMoveObj, field);
+                        field.swap();
+
+                        var brRange = br.range();
+                        var aHP = best.tmpAtk.maxHP();
+                        var bMinPct = Math.floor(brRange[0] * 1000 / aHP) / 10;
+                        var bMaxPct = Math.floor(brRange[1] * 1000 / aHP) / 10;
+                        data.push(bMinPct + " - " + bMaxPct + "%");
+                    }
+
+                    // 8 Base Speed
                     var spdObj = raidNormStatsObj((best.tmpAtk && (best.tmpAtk.rawStats || best.tmpAtk.stats)) ? (best.tmpAtk.rawStats || best.tmpAtk.stats) : (attacker.rawStats || attacker.stats));
                     data.push(spdObj.spe != null ? spdObj.spe : "");
-                    // 5 Type1
+
+                    // 9 Type1
                     data.push(attacker.types[0] || "");
-                    // 6 Type2
+
+                    // 10 Type2
                     data.push(attacker.types[1] || "");
+
                     // hidden sort key
                     data.push(best.maxD);
                     dataSet.push(data);
@@ -883,6 +923,11 @@ function constructDataTable() {
     table = $("#holder-2").DataTable({
         destroy: true,
         columnDefs: [
+            {
+                targets: [9, 10],
+                visible: false,
+                searchable: false
+            },
             {targets: [2], type: 'damage100'},
             {targets: [1], orderable: false}
         ],
@@ -894,6 +939,10 @@ function constructDataTable() {
                 if (column.bSearchable !== bVisible) {
                     column.bSearchable = bVisible;
                     table.rows().invalidate();
+                }
+                if (iColumn === 9 || iColumn === 10) {
+                    // keep searchable in sync with visibility
+                    column.bSearchable = bVisible;
                 }
             }
         },
@@ -1324,11 +1373,6 @@ $(document).ready(function () {
     $("#raid-format").prop("checked", true).trigger("change");
     $("#tookDamageL").prop("checked", true).trigger("change");
     $("#holder-2 th:first").text((mode === "one-vs-all") ? "Attacker" : "Defender");
-    // Raidalculate column order: Attacker | Move | Damage% | Ability | Speed | Type1 | Type2
-    $("#holder-2 th").eq(3).text("Ability");
-    $("#holder-2 th").eq(4).text("Speed");
-    $("#holder-2 th").eq(5).text("Type 1");
-    $("#holder-2 th").eq(6).text("Type 2");
     $("#holder-2").show();
 
     calcDTDimensions();
