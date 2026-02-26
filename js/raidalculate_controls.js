@@ -4,8 +4,14 @@ var RAID_MON_INDEX = null;   // name -> { name, types:[..], stats:{atk,spa}, lea
 var RAID_MON_INDEX_RESOLVED = null; // resolvedName -> merged mon entry
 var RAID_LAST = null;        // last computed raidalculate result
 var RAID_FORCE_PRESET = null; // null | { item: 'Choice Band' | 'Choice Specs' }
-
 var RAID_SPEED_FILTER = ""; // "" | "faster" | "slower"
+
+// --- Raidalculate UI settings (UI only for now; logic later) ---
+var RAID_SETTINGS = {
+    attackerNatureProfile: 'atk_neutral', // atk_slow | atk_neutral | spe_neutralatk
+    calcBossDamage: true,
+    mode: 'findAttacker' // findAttacker | findDefender
+};
 
 // --- Raidalculate move exclusions ---
 var RAID_MOVE_EXCLUSIONS = [
@@ -283,6 +289,35 @@ function raidGetLearnableMovesForMon(monName, moveList) {
     return out;
 }
 
+function raidHasFightingMove(moveList) {
+    for (var i = 0; i < (moveList || []).length; i++) {
+        var t = moveList[i] && moveList[i].type;
+        if (t && String(t).toLowerCase() === 'fighting') return true;
+    }
+    return false;
+}
+
+function raidAugmentPickedMoves(moveList) {
+    var out = (moveList || []).slice();
+
+    // If any picked move is Fighting-type, ensure Sacred Sword is included as an extra option.
+    if (raidHasFightingMove(out)) {
+        var hasSS = false;
+        for (var i = 0; i < out.length; i++) {
+            if (out[i] && out[i].name === 'Sacred Sword') { hasSS = true; break; }
+        }
+        if (!hasSS) {
+            out.push({name: 'Sacred Sword', type: 'Fighting', category: 'Physical'});
+        }
+    }
+
+    return out;
+}
+
+function raidIsSuperpowerOrCC(name) {
+    return name === 'Superpower' || name === 'Close Combat';
+}
+
 // Helper: resolve monsters.json names to calc/pokedex names
 function raidResolveSpeciesName(name) {
     var n = raidNormName(name);
@@ -314,6 +349,49 @@ function raidResolveSpeciesName(name) {
         }
     }
     return n;
+}
+
+
+function raidGetAtkProfileForCategory(profile, categoryLc) {
+    var isPhysical = categoryLc === 'physical';
+
+    if (profile === 'atk_slow') {
+        return {
+            nature: isPhysical ? 'Brave' : 'Quiet',
+            evs: isPhysical
+                ? {hp: 252, atk: 252, def: 4, spa: 0, spd: 0, spe: 0}
+                : {hp: 252, atk: 0,   def: 4, spa: 252, spd: 0, spe: 0}
+        };
+    }
+
+    if (profile === 'spe_neutralatk') {
+        return {
+            nature: isPhysical ? 'Jolly' : 'Timid',
+            evs: isPhysical
+                ? {hp: 4, atk: 252, def: 0, spa: 0,   spd: 0, spe: 252}
+                : {hp: 4, atk: 0,   def: 0, spa: 252, spd: 0, spe: 252}
+        };
+    }
+
+    // atk_neutral (default)
+    return {
+        nature: isPhysical ? 'Adamant' : 'Modest',
+        evs: isPhysical
+            ? {hp: 4, atk: 252, def: 0, spa: 0,   spd: 0, spe: 252}
+            : {hp: 4, atk: 0,   def: 0, spa: 252, spd: 0, spe: 252}
+    };
+}
+
+function raidApplyAtkProfileToPokemon(pkmn, mv) {
+    var catLc = String((mv && mv.category) || '').toLowerCase();
+    if (catLc !== 'physical' && catLc !== 'special') return pkmn;
+
+    var prof = (RAID_SETTINGS && RAID_SETTINGS.attackerNatureProfile) ? RAID_SETTINGS.attackerNatureProfile : 'atk_neutral';
+    var cfg = raidGetAtkProfileForCategory(prof, catLc);
+
+    pkmn.nature = cfg.nature;
+    pkmn.evs = $.extend({hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0}, cfg.evs);
+    return pkmn;
 }
 
 function raidApplyPresetEVs(attacker) {
@@ -551,6 +629,16 @@ function performCalculations() {
         return;
     }
     var setOptions = RAID_LAST.setOptions;
+    var pickedMovesLocal = raidAugmentPickedMoves(RAID_LAST.pickedMoves || []);
+    var calcBossDmg = $('#raid-setting-bossdmg').is(':checked');
+    // Toggle Boss Damage columns (indexes 4-7) based on setting
+    if (table) {
+        for (var c = 4; c <= 7; c++) {
+            if (table.column(c)) {
+                table.column(c).visible(calcBossDmg);
+            }
+        }
+    }
     var dataSet = [];
     var pokeInfo = $("#p1");
     for (var i = 0; i < setOptions.length; i++) {
@@ -571,7 +659,7 @@ function performCalculations() {
             var presets = [null];
 
             if (RAID_LAST && defender && defender.name === RAID_LAST.targetName && RAID_MON_INDEX) {
-                var learnableAll = raidGetLearnableMovesForMon(attacker.name, RAID_LAST.pickedMoves);
+                var learnableAll = raidGetLearnableMovesForMon(attacker.name, pickedMovesLocal);
                 var hasPhys = false, hasSpec = false;
 
                 for (var lm = 0; lm < learnableAll.length; lm++) {
@@ -604,8 +692,18 @@ function performCalculations() {
                 attacker = raidRebuildPokemon(attacker);
 
                 // For this attacker+preset, show ALL picked moves the mon can learn
-                var learnablePicked = raidGetLearnableMovesForMon(attacker.name, RAID_LAST.pickedMoves);
+                var learnablePicked = raidGetLearnableMovesForMon(attacker.name, pickedMovesLocal);
                 if (!learnablePicked || !learnablePicked.length) continue;
+
+                // If both Superpower and Close Combat are learnable, treat them as one combined entry.
+                var hasSuperpower = false;
+                var hasCloseCombat = false;
+                for (var _i = 0; _i < learnablePicked.length; _i++) {
+                    var _n = learnablePicked[_i] && learnablePicked[_i].name;
+                    if (_n === 'Superpower') hasSuperpower = true;
+                    if (_n === 'Close Combat') hasCloseCombat = true;
+                }
+                var handledFightingPair = false;
 
                 // ability candidates (include pool from monsters.json)
                 var monInfo = RAID_MON_INDEX_RESOLVED ? RAID_MON_INDEX_RESOLVED[raidResolveSpeciesName(attacker.name)] : null;
@@ -647,6 +745,11 @@ function performCalculations() {
                 for (var mi = 0; mi < learnablePicked.length; mi++) {
                     var mv = learnablePicked[mi];
                     if (!mv || !mv.name) continue;
+                    // Combine Superpower + Close Combat into a single result row
+                    if (raidIsSuperpowerOrCC(mv.name)) {
+                        if (handledFightingPair) continue;
+                        handledFightingPair = true;
+                    }
                     var catLc = String(mv.category || "").toLowerCase();
                     if (wantCat && catLc !== wantCat) continue;
 
@@ -656,11 +759,19 @@ function performCalculations() {
                         var tmpAtk = attacker.clone ? attacker.clone() : attacker;
                         tmpAtk.ability = abilityCandidates[ab];
                         if (tmpAtk.ability === "Rivalry") tmpAtk.gender = "N";
+                        // Apply nature+EVs per move category
+                        tmpAtk = raidApplyAtkProfileToPokemon(tmpAtk, mv);
                         tmpAtk.item = bestItemForMoveLocal(mv);
                         // Rebuild so stats/item/ability are consistent
                         tmpAtk = raidRebuildPokemon(tmpAtk);
+                        // If we are on the combined Superpower/Close Combat entry, pick a canonical move for calc.
+                        var mvNameForCalc = mv.name;
+                        if (raidIsSuperpowerOrCC(mv.name)) {
+                            // Prefer Close Combat if available on this mon, else use Superpower.
+                            mvNameForCalc = hasCloseCombat ? 'Close Combat' : 'Superpower';
+                        }
 
-                        var moveObj = raidBuildMove(gen, mv.name);
+                        var moveObj = raidBuildMove(gen, mvNameForCalc);
 
                         // Force hit count for multi-hit moves when relevant (Skill Link / Loaded Dice)
                         if (mv.multihit && Array.isArray(mv.multihit) && mv.multihit.length > 1) {
@@ -698,7 +809,11 @@ function performCalculations() {
                     var lvlMeta = (best.tmpAtk && best.tmpAtk.level) ? best.tmpAtk.level : (attacker.level || defaultLevel || 100);
                     var natMeta = (best.tmpAtk && best.tmpAtk.nature) ? best.tmpAtk.nature : (attacker.nature || 'Hardy');
                     // Unique key per attacker + move + preset + ability
-                    var raidKey = setOptions[i].id + '|' + mv.name + '|' + (RAID_FORCE_PRESET && RAID_FORCE_PRESET.item ? RAID_FORCE_PRESET.item : '') + '|' + (best.tmpAtk && best.tmpAtk.ability ? best.tmpAtk.ability : '');
+                    var keyMoveName = mv.name;
+                    if (raidIsSuperpowerOrCC(mv.name) && hasSuperpower && hasCloseCombat) {
+                        keyMoveName = 'Close Combat / Superpower';
+                    }
+                    var raidKey = setOptions[i].id + '|' + keyMoveName + '|' + (RAID_FORCE_PRESET && RAID_FORCE_PRESET.item ? RAID_FORCE_PRESET.item : '') + '|' + (best.tmpAtk && best.tmpAtk.ability ? best.tmpAtk.ability : '');
                     var ivsNorm = raidNormStatsObj(ivsMeta);
                     var evsNorm = raidNormStatsObj(evsMeta);
                     RAID_ROW_META[raidKey] = {
@@ -707,7 +822,7 @@ function performCalculations() {
                         ability: (best.tmpAtk && best.tmpAtk.ability) ? best.tmpAtk.ability : (attacker.ability || ""),
                         nature: natMeta || (attacker.nature || "Hardy"),
                         level: lvlMeta || (attacker.level || defaultLevel || 100),
-                        move: String(mv.name).replace("Hidden Power", "HP"),
+                        move: (raidIsSuperpowerOrCC(mv.name) && hasSuperpower && hasCloseCombat) ? 'Close Combat / Superpower' : String(mv.name).replace("Hidden Power", "HP"),
                         base: raidGetBaseStatsNorm(resolvedForMeta),
                         ivs: ivsNorm,
                         evs: evsNorm,
@@ -724,7 +839,12 @@ function performCalculations() {
                     var data = [attackerCell];
 
                     // 1 Move
-                    var moveLabel = String(mv.name).replace("Hidden Power", "HP");
+                    var moveLabel;
+                    if (raidIsSuperpowerOrCC(mv.name) && hasSuperpower && hasCloseCombat) {
+                        moveLabel = 'Close Combat / Superpower';
+                    } else {
+                        moveLabel = String(mv.name).replace("Hidden Power", "HP");
+                    }
                     data.push(moveLabel);
 
                     // 2 Damage% (attacker -> boss)
@@ -734,26 +854,34 @@ function performCalculations() {
                     data.push(best.tmpAtk.ability || "");
 
                     // 4-7 Boss move damage% (boss -> attacker)
-                    for (var bi = 0; bi < 4; bi++) {
-                        var bm = defender && defender.moves && defender.moves[bi];
-                        var bmName = bm && bm.name ? bm.name : "";
-                        if (!bmName || bmName === "(No Move)") {
-                            data.push("");
-                            continue;
+                    if (!calcBossDmg) {
+                        // Keep column count consistent, but don't calculate
+                        data.push("");
+                        data.push("");
+                        data.push("");
+                        data.push("");
+                    } else {
+                        for (var bi = 0; bi < 4; bi++) {
+                            var bm = defender && defender.moves && defender.moves[bi];
+                            var bmName = bm && bm.name ? bm.name : "";
+                            if (!bmName || bmName === "(No Move)") {
+                                data.push("");
+                                continue;
+                            }
+
+                            var bossMoveObj = raidBuildMove(gen, bmName);
+
+                            // swap perspective so boss is attacker
+                            field.swap();
+                            var br = calc.calculate(gen, defender, best.tmpAtk, bossMoveObj, field);
+                            field.swap();
+
+                            var brRange = br.range();
+                            var aHP = best.tmpAtk.maxHP();
+                            var bMinPct = Math.floor(brRange[0] * 1000 / aHP) / 10;
+                            var bMaxPct = Math.floor(brRange[1] * 1000 / aHP) / 10;
+                            data.push(bMinPct + " - " + bMaxPct + "%");
                         }
-
-                        var bossMoveObj = raidBuildMove(gen, bmName);
-
-                        // swap perspective so boss is attacker
-                        field.swap();
-                        var br = calc.calculate(gen, defender, best.tmpAtk, bossMoveObj, field);
-                        field.swap();
-
-                        var brRange = br.range();
-                        var aHP = best.tmpAtk.maxHP();
-                        var bMinPct = Math.floor(brRange[0] * 1000 / aHP) / 10;
-                        var bMaxPct = Math.floor(brRange[1] * 1000 / aHP) / 10;
-                        data.push(bMinPct + " - " + bMaxPct + "%");
                     }
 
                     // 8 Base Speed
@@ -929,7 +1057,8 @@ function constructDataTable() {
                 searchable: false
             },
             {targets: [2], type: 'damage100'},
-            {targets: [1], orderable: false}
+            {targets: [1], orderable: false},
+            { targets: [4,5,6,7], visible: false }
         ],
         dom: 'C<"clear">fti',
         colVis: {
@@ -1003,9 +1132,18 @@ function raidPopulateMoveFilter() {
     $sel.empty();
     $sel.append('<option value="">All moves</option>');
     if (!RAID_LAST || !RAID_LAST.pickedMoves) return;
-    var names = RAID_LAST.pickedMoves.map(function (m) {
-        return m.name;
-    });
+
+    var pm = raidAugmentPickedMoves(RAID_LAST.pickedMoves || []);
+    var names = pm.map(function (m) { return m.name; });
+
+// If both Close Combat and Superpower are present, show a single combined option to match the table rows
+    var hasCC = names.indexOf('Close Combat') !== -1;
+    var hasSP = names.indexOf('Superpower') !== -1;
+    if (hasCC && hasSP) {
+        names = names.filter(function (n) { return n !== 'Close Combat' && n !== 'Superpower'; });
+        names.push('Close Combat / Superpower');
+    }
+
     names.sort();
     for (var i = 0; i < names.length; i++) {
         $sel.append('<option value="' + raidEscHtml(names[i]) + '">' + raidEscHtml(names[i]) + '</option>');
@@ -1032,29 +1170,149 @@ function placeBsBtn() {
     $('#raid-controls').remove();
 
     var raidalculate =
-        "<div id='raid-controls' style='position:relative; height:28px;'>" +
-        "<button style='position:absolute' class='raid-calc-btn bs-btn bs-btn-default'>Raidalculate</button>" +
-        "<button style='position:absolute; margin-left:110px;  display:flex; align-items:center; justify-content:center;' aria-label='Info' class='raid-info-btn bs-btn bs-btn-default' type='button'>" +
-        "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
-        "<circle cx='12' cy='12' r='10'></circle>" +
-        "<line x1='12' y1='16' x2='12' y2='12'></line>" +
-        "<line x1='12' y1='8' x2='12.01' y2='8'></line>" +
-        "</svg>" +
-        "</button>" +
-        "<span style='position:absolute; margin-left:180px; line-height:30px;'>Filter Move:</span>" +
-        "<select id='raid-move-filter' style='position:absolute; margin-left:270px; max-width:240px;' class='bs-btn bs-btn-default'></select>" +
-        "<span style='position:absolute; margin-left:500px; line-height:30px;'>Speed:</span>" +
-        "<select id='raid-speed-filter' style='position:absolute; margin-left:555px; max-width:170px;' class='bs-btn bs-btn-default'>" +
-        "<option value=''>All</option>" +
-        "<option value='faster'>Faster than target</option>" +
-        "<option value='slower'>Slower than target</option>" +
-        "</select>" +
+        "<div id='raid-controls' style='margin:6px 0 30px 0;'>" +
+
+        // Row 1: action + settings (inline)
+        "  <div id='raid-controls-row1' style='display:flex; align-items:center; gap:8px; flex-wrap:wrap;'>" +
+        "    <button class='raid-calc-btn bs-btn bs-btn-default'>Raidalculate</button>" +
+        "    <button aria-label='Info' class='raid-info-btn bs-btn bs-btn-default' type='button' style='display:flex; align-items:center; justify-content:center;'>" +
+        "      <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "        <circle cx='12' cy='12' r='10'></circle>" +
+        "        <line x1='12' y1='16' x2='12' y2='12'></line>" +
+        "        <line x1='12' y1='8' x2='12.01' y2='8'></line>" +
+        "      </svg>" +
+        "    </button>" +
+
+        // Mode inline (Field-style buttons)
+        "    <span style='margin-left:6px;'>Mode:</span>" +
+        "    <span id='raid-mode-inline' style='white-space:nowrap;'>" +
+        "      <input class='visually-hidden' type='radio' name='raid-mode-inline' value='findAttacker' id='raid-mode-attack' checked />" +
+        "      <label class='btn btn-left' for='raid-mode-attack'>Attack</label>" +
+        "      <input class='visually-hidden' type='radio' name='raid-mode-inline' value='findDefender' id='raid-mode-defend' />" +
+        "      <label class='btn btn-right' for='raid-mode-defend'>Defend</label>" +
+        "    </span>" +
+        "  </div>" +
+
+        // Row 2: Boss dmg + Atk profile
+        "<div id='raid-controls-row2' style='display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:12px;'>" +
+
+        // Boss dmg toggle
+        "    <span id='raid-setting-bossdmg-wrap' style='white-space:nowrap;'>" +
+        "      <input class='visually-hidden' type='checkbox' id='raid-setting-bossdmg' checked />" +
+        "      <label class='btn btn-mid btn-wide' style='margin-left: 1" +
+        "px;' for='raid-setting-bossdmg' title='Adds 4 columns showing boss → attacker damage. This makes Raidalculate slower.'>Boss dmg</label>" +
+        "      <span style='margin-left:6px; font-size:12px; opacity:.75;'>adds boss damage (slower) </span>" +
+        "    </span>" +
+
+        // Attacker nature profile
+        "    <span id='raid-setting-attacker-natures' style='white-space:nowrap;'>" +
+        "      <span style='margin-right:6px;'>Nature:</span>" +
+        "      <input class='visually-hidden' type='radio' name='raid-setting-attacker-nature' value='atk_slow' id='raid-atkprof-slow' />" +
+        "      <label class='btn btn-wide btn-left' style='min-width:95px; text-align:center;' for='raid-atkprof-slow'>+Atk -Spe</label>" +
+        "      <input class='visually-hidden' type='radio' name='raid-setting-attacker-nature' value='atk_neutral' id='raid-atkprof-atk' checked />" +
+        "      <label class='btn btn-wide btn-mid' style='min-width:95px; text-align:center;' for='raid-atkprof-atk'>+Atk</label>" +
+        "      <input class='visually-hidden' type='radio' name='raid-setting-attacker-nature' value='spe_neutralatk' id='raid-atkprof-spe' />" +
+        "      <label class='btn btn-wide btn-right' style='min-width:95px; text-align:center;' for='raid-atkprof-spe'>+Spe</label>" +
+        "    </span>" +
+
+        "  </div>" +
+
         "</div>";
 
     $("#holder-2_wrapper").prepend(raidalculate);
+
+    // Helper: move filters into DataTables filter bar
+    function raidPlaceInlineFilters() {
+        // Put filters next to DataTables Search box
+        var $filter = $('#holder-2_wrapper .dataTables_filter');
+        if (!$filter.length) return;
+
+        // Ensure filter bar is flex and left-align filters, keep Search on far right
+        $filter.css({display: 'flex', 'align-items': 'center', gap: '10px', 'flex-wrap': 'wrap', 'justify-content': 'flex-start', width: '100%'});
+
+        // Keep the existing search label/input but make it last
+        var $label = $filter.find('label').first();
+
+        // Create (or reuse) our inline filters container
+        var $box = $('#raid-inline-filters');
+        if (!$box.length) {
+            $box = $('<div id="raid-inline-filters" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;"></div>');
+            // Insert before the Search label
+            if ($label.length) $box.insertBefore($label);
+            else $filter.prepend($box);
+
+            $box.append('<span style="white-space:nowrap;">Filter Move:</span>');
+            $box.append('<select id="raid-move-filter" class="bs-btn bs-btn-default" style="max-width:220px;"></select>');
+            $box.append('<span style="white-space:nowrap;">Speed:</span>');
+            $box.append('<select id="raid-speed-filter" class="bs-btn bs-btn-default" style="max-width:160px;">' +
+                '<option value="">All</option>' +
+                '<option value="faster">Faster than target</option>' +
+                '<option value="slower">Slower than target</option>' +
+                '</select>');
+        }
+
+        // Make the search label align nicely and push Search to the far right
+        if ($label.length) {
+            // Push Search to the far right
+            $label.css({display: 'flex', 'align-items': 'center', gap: '6px', margin: 0, 'margin-left': 'auto'});
+        }
+
+        // Ensure filter text is readable in dark themes
+        try {
+            if (!document.getElementById('raid-inline-filter-style')) {
+                var css2 = '' +
+                    '#holder-2_wrapper .dataTables_filter, #holder-2_wrapper .dataTables_filter label { color:#e6e6e6 !important; }' +
+                    '#holder-2_wrapper #raid-inline-filters span { color:#e6e6e6 !important; }' +
+                    '#holder-2_wrapper #raid-inline-filters select { color:#fff !important; background:#222 !important; border:1px solid #555 !important; }' +
+                    '#holder-2_wrapper #raid-inline-filters option { color:#000; }';
+                var st2 = document.createElement('style');
+                st2.id = 'raid-inline-filter-style';
+                st2.type = 'text/css';
+                st2.appendChild(document.createTextNode(css2));
+                document.head.appendChild(st2);
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    raidPlaceInlineFilters();
     raidPopulateMoveFilter();
     raidBindMoveFilter();
     raidBindSpeedFilter();
+
+    function raidRefreshSettingsUI() {
+        $('input[name="raid-mode-inline"][value="' + RAID_SETTINGS.mode + '"]').prop('checked', true);
+        $('#raid-setting-bossdmg').prop('checked', !!RAID_SETTINGS.calcBossDamage);
+        $('input[name="raid-setting-attacker-nature"][value="' + RAID_SETTINGS.attackerNatureProfile + '"]').prop('checked', true);
+
+        if (RAID_SETTINGS.mode === 'findAttacker') {
+            $('#raid-setting-attacker-natures').show();
+            $('#raid-setting-bossdmg-wrap').show();
+        } else {
+            $('#raid-setting-attacker-natures').hide();
+            $('#raid-setting-bossdmg-wrap').hide();
+        }
+    }
+
+    $(document)
+        .off('change.raidsettings', '#raid-setting-bossdmg, input[name="raid-mode-inline"], input[name="raid-setting-attacker-nature"]')
+        .on('change.raidsettings', '#raid-setting-bossdmg, input[name="raid-mode-inline"], input[name="raid-setting-attacker-nature"]', function () {
+            RAID_SETTINGS.calcBossDamage = $('#raid-setting-bossdmg').is(':checked');
+            RAID_SETTINGS.mode = $('input[name="raid-mode-inline"]:checked').val() || 'findAttacker';
+            RAID_SETTINGS.attackerNatureProfile = $('input[name="raid-setting-attacker-nature"]:checked').val() || 'atk_slow';
+            raidRefreshSettingsUI();
+        });
+
+    raidRefreshSettingsUI();
+    try {
+        var $cv = $('#holder-2_wrapper .ColVis').first();
+        if ($cv.length) {
+            $cv.css({ marginLeft: 'auto' });           // push it to the far right of row 1
+            $('#raid-controls-row1').append($cv);      // place next to Mode/Attack/Defend
+        }
+    } catch (e) {}
+
     $(".raid-calc-btn").off("click.raidalculate").on("click.raidalculate", async function () {
         // 1) selected target
         var selected;
@@ -1291,26 +1549,76 @@ function placeBsBtn() {
                 html += '<div><b>Weaknesses:</b> ' + (RAID_LAST.weaknesses || []).map(function (x) {
                     return x.type + ' x' + x.mult;
                 }).join(', ') + '</div>';
-                html += '<div><b>Picked move pool:</b> ' + (RAID_LAST.pickedMoves ? RAID_LAST.pickedMoves.length : 0) + ' moves</div>';
-                html += '<div><b>Generated attackers:</b> ' + (RAID_LAST.setOptions ? RAID_LAST.setOptions.length : 0) + '</div>';
+
+                // Augmented pool used by calculations (includes auto-added moves like Sacred Sword)
+                var rawPicked = (RAID_LAST && RAID_LAST.pickedMoves) ? RAID_LAST.pickedMoves : [];
+                var debugPickedMoves = raidAugmentPickedMoves(rawPicked);
+
+                // Determine which moves were auto-added
+                var rawNames = {};
+                for (var rmi = 0; rmi < rawPicked.length; rmi++) {
+                    if (rawPicked[rmi] && rawPicked[rmi].name) rawNames[rawPicked[rmi].name] = true;
+                }
+                var addedNames = [];
+                for (var ami = 0; ami < (debugPickedMoves || []).length; ami++) {
+                    var n = debugPickedMoves[ami] && debugPickedMoves[ami].name;
+                    if (n && !rawNames[n]) addedNames.push(n);
+                }
+
+                var poolList = (debugPickedMoves || [])
+                    .map(function (m) { return m && m.name ? m.name : ''; })
+                    .filter(Boolean);
+                poolList.sort();
+
+                html += '<div><b>Picked move pool (augmented):</b> ' + (debugPickedMoves ? debugPickedMoves.length : 0) + ' moves</div>';
+                if (addedNames.length) {
+                    addedNames.sort();
+                    html += '<div><b>Added Moves:</b> ' + addedNames.join(', ') + '</div>';
+                }
+
+// Map added moves by type/category so we can show them in the per-type lists below
+                var addedByType = {}; // { [type]: { physical:[name], special:[name] } }
+                for (var ax = 0; ax < (debugPickedMoves || []).length; ax++) {
+                    var amv = debugPickedMoves[ax];
+                    if (!amv || !amv.name) continue;
+                    if (addedNames.indexOf(amv.name) === -1) continue;
+
+                    var t = amv.type || '';
+                    var cat = String(amv.category || '').toLowerCase();
+                    if (!addedByType[t]) addedByType[t] = { physical: [], special: [] };
+
+                    if (cat === 'special') addedByType[t].special.push(amv.name);
+                    else addedByType[t].physical.push(amv.name);
+                }
+
+                html += '<div style="margin-top:6px;"><b>Generated attackers:</b> ' + (RAID_LAST.setOptions ? RAID_LAST.setOptions.length : 0) + '</div>';
                 html += '<hr style="margin:6px 0;" />';
+
+                // Note: picks below are the original weakness picks (pre-augmentation)
                 if (RAID_LAST.pickedByWeakType) {
                     for (var wi3 = 0; wi3 < (RAID_LAST.weaknesses || []).length; wi3++) {
                         var ww = RAID_LAST.weaknesses[wi3];
                         var picks = RAID_LAST.pickedByWeakType[ww.type] || {physical: [], special: []};
+                        var extra = (addedByType && addedByType[ww.type]) ? addedByType[ww.type] : { physical: [], special: [] };
+
                         html += '<div style="margin-top:8px;">';
                         html += '<div style="font-weight:700;">' + ww.type + ' (x' + ww.mult + ')</div>';
-                        html += '<div><b>Physical:</b> ' + (picks.physical || []).map(function (m) {
-                            return m.name;
-                        }).join(', ') + '</div>';
-                        html += '<div><b>Special:</b> ' + (picks.special || []).map(function (m) {
-                            return m.name;
-                        }).join(', ') + '</div>';
+
+                        var physNames = (picks.physical || []).map(function (m) { return m.name; });
+                        if (extra.physical && extra.physical.length) physNames = physNames.concat(extra.physical);
+                        html += '<div><b>Physical:</b> ' + physNames.join(', ') + '</div>';
+
+                        var specNames = (picks.special || []).map(function (m) { return m.name; });
+                        if (extra.special && extra.special.length) specNames = specNames.concat(extra.special);
+                        html += '<div><b>Special:</b> ' + specNames.join(', ') + '</div>';
+
                         html += '</div>';
                     }
                 }
+
                 html += '</div>';
             }
+
             $(this).popover({
                 html: true,
                 content: html,

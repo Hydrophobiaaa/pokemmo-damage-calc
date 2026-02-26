@@ -10,6 +10,32 @@
     <link type="text/css" rel="stylesheet" href="./js/vendor/select2/select2.css"/>
     <link type="text/css" rel="stylesheet" href="./css/main.css?788583a2"/>
     <link type="text/css" rel="stylesheet" href="./css/dark-theme.css" id="dark-theme-styles">
+    <style>
+    /* Page-specific override: fix panel heading text color in raid layout only */
+    .panel-default > .panel-heading {
+        color: inherit !important;
+    }
+
+    .panel-default > .panel-heading,
+    .panel-default > .panel-heading a,
+    .panel-default > .panel-heading .collapsible-link {
+        color: #e6e6e6 !important;
+    }
+
+    /* Center Pokemon legend text and allow symmetric overflow */
+    .panel-heading.panel-title {
+        text-align: center;
+    }
+
+    .panel-heading.panel-title .collapsible-link {
+        display: inline-block;
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+        width: max-content;
+        white-space: nowrap;
+    }
+    </style>
     <!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=UA-26211653-3"></script>
     <script>
@@ -61,10 +87,9 @@
     <div class="panel-group" id="accordion">
         <fieldset class="panel panel-default poke-info" id="p1">
             <legend class="panel-heading panel-title">
-                <a data-toggle="collapse" data-parent="#accordion" href="#collapseOne" class="collapsible-link">>
-                    Pokemon</a>
+                <span class="collapsible-link">Pokemon</span>
             </legend>
-            <div id="collapseOne" class="panel-collapse collapse in">
+            <div id="collapseOne" class="panel-collapse">
                 <div class="panel-body">
                     <input type="text" class="set-selector calc-trigger"/>
                     <span id="importedSetsOptions" style="width:auto; display:none">
@@ -676,10 +701,9 @@
         </fieldset>
         <fieldset class="panel panel-default field-info">
             <legend class="panel-heading panel-title">
-                <a data-toggle="collapse" data-parent="#accordion" href="#collapseTwo" class="collapsible-link">>
-                    Field</a>
+                <span class="collapsible-link">Field</span>
             </legend>
-            <div id="collapseTwo" class="panel-collapse collapse">
+            <div id="collapseTwo" class="panel-collapse">
                 <div class="panel-body">
                     <div aria-labelledby="selectBattleFormatInstruction" class="gen-specific g3 g4 g5 g6 g7 g8 g9"
                          role="radiogroup" style="width: 16.6em; margin: 0 auto 5px;" title="Select the battle format.">
