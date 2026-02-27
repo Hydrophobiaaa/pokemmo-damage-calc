@@ -10,7 +10,8 @@ var RAID_SPEED_FILTER = ""; // "" | "faster" | "slower"
 var RAID_SETTINGS = {
     attackerNatureProfile: 'atk_neutral', // atk_slow | atk_neutral | spe_neutralatk
     calcBossDamage: true,
-    mode: 'findAttacker' // findAttacker | findDefender
+    mode: 'findAttacker', // findAttacker | findDefender,
+    useDefItems: true
 };
 
 // --- Raidalculate move exclusions ---
@@ -26,7 +27,8 @@ var RAID_MOVE_EXCLUSIONS = [
     "Aeroblast",
     "Future Sight",
     "Psycho Boost",
-    "Psystrike"
+    "Psystrike",
+    "Zap Cannon"
 ];
 
 // --- Raidalculate pokemon exclusions (obtainable but not usable) ---
@@ -39,6 +41,111 @@ var RAID_MON_EXCLUSIONS = [
     "Arceus",
     "Lugia"
 ];
+
+
+// Custom Raid sets (normal builder format)
+var RAID_CUSTOM_SETS = {
+    "[Raid] Cobalion 6⭐": {
+        name: "Cobalion",
+        level: 100,
+        ability: "Justified",
+        item: "Expert Belt",
+        nature: "Hardy",
+        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
+        baseStats: {
+            hp: 910,
+            atk: 225,
+            def: 1290,
+            spa: 225,
+            spd: 720,
+            spe: 108
+        },
+        moves: ["Air Slash", "Sacred Sword", "Flash Cannon", "Stone Edge"]
+    },
+    "[Raid] Terrakion 6⭐": {
+        name: "Terrakion",
+        level: 100,
+        ability: "Justified",
+        item: "Lum Berry",
+        nature: "Hardy",
+        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
+        baseStats: {
+            hp: 910,
+            atk: 322,
+            def: 900,
+            spa: 180,
+            spd: 900,
+            spe: 108
+        },
+        moves: ["Stone Edge", "Sacred Sword", "Earthquake", "Poison Jab"]
+    },
+
+    "[Raid] Virizion 6⭐": {
+        name: "Virizion",
+        level: 100,
+        ability: "Justified",
+        item: "Liechi Berry",
+        nature: "Hardy",
+        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
+        baseStats: {
+            hp: 910,
+            atk: 225,
+            def: 720,
+            spa: 225,
+            spd: 1290,
+            spe: 108
+        },
+        moves: ["Stone Edge", "Stone Edge", "X-Scissor", "Sacred Sword"]
+    },
+
+    "[Raid] Keldeo 6⭐": {
+        name: "Keldeo",
+        level: 100,
+        ability: "Justified",
+        item: "Leftovers",
+        nature: "Hardy",
+        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:0 },
+        baseStats: {
+            hp: 910,
+            atk: 180,
+            def: 900,
+            spa: 322,
+            spd: 900,
+            spe: 108
+        },
+        moves: ["Surf", "Secret Sword", "Ice Beam", "Air Slash"]
+    }
+
+};
+
+
+function raidSyncModeUI() {
+    var isDef = (RAID_SETTINGS && RAID_SETTINGS.mode === 'findDefender');
+    raidSetMoveFilterVisible(!isDef);
+}
+
+function raidBindModeToggleUI() {
+    $(document)
+        .off('click.raidmode change.raidmode', '#raid-mode-attack, #raid-mode-defend, input[name="raid-mode"], .raid-mode-btn')
+        .on('click.raidmode change.raidmode', '#raid-mode-attack, #raid-mode-defend, input[name="raid-mode"], .raid-mode-btn', function () {
+            var id = String($(this).attr('id') || '').toLowerCase();
+            var val = String($(this).val() || '').toLowerCase();
+            var txt = String($(this).text() || '').toLowerCase();
+
+            var wantDef = false;
+            if (id.indexOf('def') !== -1) wantDef = true;
+            if (val.indexOf('def') !== -1) wantDef = true;
+            if (txt.indexOf('def') !== -1) wantDef = true;
+
+            RAID_SETTINGS.mode = wantDef ? 'findDefender' : 'findAttacker';
+            raidSyncModeUI();
+        });
+}
+
 
 // --- Raidalculate per-row metadata for hover popups ---
 var RAID_ROW_META = {}; // raidKey -> { base, ivs, evs, stats }
@@ -391,11 +498,106 @@ function raidApplyAtkProfileToPokemon(pkmn, mv) {
 
     pkmn.nature = cfg.nature;
     pkmn.evs = $.extend({hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0}, cfg.evs);
+
+    // For -Speed nature profile, force Speed IV to 0 (Brave/Quiet). Otherwise keep 31.
+    // Some legacy helpers use `sp` for Speed; set both keys.
+    pkmn.ivs = pkmn.ivs || {hp:31, atk:31, def:31, spa:31, spd:31, spe:31};
+    var spIv = (prof === 'atk_slow') ? 0 : 31;
+    pkmn.ivs.spe = spIv;
+    pkmn.ivs.sp = spIv;
+
+    return pkmn;
+}
+
+// --- Defender profiles ---
+function raidGetDefProfile(profile, isSpDef) {
+    // isSpDef = true when optimizing SpD instead of Def
+
+    if (profile === 'def_slow') {
+        return {
+            nature: isSpDef ? 'Sassy' : 'Relaxed',
+            evs: isSpDef
+                ? {hp: 252, atk: 0, def: 4, spa: 0, spd: 252, spe: 0}
+                : {hp: 252, atk: 0, def: 252, spa: 0, spd: 4, spe: 0}
+        };
+    }
+
+    if (profile === 'def_speed') {
+        return {
+            nature: isSpDef ? 'Timid' : 'Jolly',
+            evs: isSpDef
+                ? {hp: 252, atk: 0, def: 4, spa: 0, spd: 252, spe: 252}
+                : {hp: 252, atk: 0, def: 252, spa: 0, spd: 4, spe: 252}
+        };
+    }
+
+    // default neutral speed
+    return {
+        nature: isSpDef ? 'Careful' : 'Impish',
+        evs: isSpDef
+            ? {hp: 252, atk: 0, def: 4, spa: 0, spd: 252, spe: 0}
+            : {hp: 252, atk: 0, def: 252, spa: 0, spd: 4, spe: 0}
+    };
+}
+
+function raidApplyDefProfile(pkmn, profile, isSpDef) {
+    var cfg = raidGetDefProfile(profile, isSpDef);
+    pkmn.nature = cfg.nature;
+    pkmn.evs = $.extend({hp:0,atk:0,def:0,spa:0,spd:0,spe:0}, cfg.evs);
+
+    // For -Speed defender profile, force Speed IV to 0 (Relaxed/Sassy). Otherwise keep 31.
+    // Some legacy helpers use `sp` for Speed; set both keys.
+    pkmn.ivs = pkmn.ivs || {hp:31, atk:31, def:31, spa:31, spd:31, spe:31};
+    var spIv = (profile === 'def_slow') ? 0 : 31;
+    pkmn.ivs.spe = spIv;
+    pkmn.ivs.sp = spIv;
+
+    return pkmn;
+}
+
+function raidApplyDefItems(pkmn, defenderMoves) {
+    if (!RAID_SETTINGS || !RAID_SETTINGS.useDefItems) return pkmn;
+
+    // Eviolite for non-final evolutions
+    var resolved = raidResolveSpeciesName(pkmn.name);
+    var sp = pokedex && pokedex[resolved];
+    var isNFE = false;
+    if (sp) {
+        if (sp.nfe === true) isNFE = true;
+        else if (sp.evos && sp.evos.length) isNFE = true;
+    }
+
+    if (isNFE) {
+        pkmn.item = 'Eviolite';
+
+        if (String(pkmn.name || '').toLowerCase() === 'dusclops') {
+            console.log('[RAID][DEFITEM] Dusclops -> Eviolite. resolved=', resolved, 'sp.nfe=', sp && sp.nfe, 'sp.evos=', sp && sp.evos);
+        }
+        return pkmn;
+    }
+
+    // Assault Vest if boss has special moves
+    var hasSpecial = false;
+    for (var i = 0; i < defenderMoves.length; i++) {
+        var mv = defenderMoves[i];
+        if (mv && String(mv.category || '').toLowerCase() === 'special') {
+            hasSpecial = true;
+            break;
+        }
+    }
+
+    if (hasSpecial) pkmn.item = 'Assault Vest';
     return pkmn;
 }
 
 function raidApplyPresetEVs(attacker) {
     if (!attacker) return;
+    // Also apply -Speed profile Speed IV=0 (Brave/Quiet profile) so speed changes actually take effect
+    attacker.ivs = attacker.ivs || {hp:31, atk:31, def:31, spa:31, spd:31, spe:31};
+    var prof = (RAID_SETTINGS && RAID_SETTINGS.attackerNatureProfile) ? RAID_SETTINGS.attackerNatureProfile : 'atk_neutral';
+    var spIv = (prof === 'atk_slow') ? 0 : 31;
+    attacker.ivs.spe = spIv;
+    attacker.ivs.sp = spIv;
     attacker.evs = attacker.evs || {hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0};
     attacker.evs.hp = 4;
     attacker.evs.def = 0;
@@ -548,6 +750,14 @@ function raidUpdateBossMoveHeaders(defender) {
     }
 }
 
+// Helper to show/hide the Move filter UI (for Defender mode)
+function raidSetMoveFilterVisible(isVisible) {
+    var visible = !!isVisible;
+    $('#raid-move-filter').toggle(visible);
+    $('#raid-move-filter-label').toggle(visible);
+}
+
+
 $.fn.DataTable.ColVis.prototype._fnDomColumnButton = function (i) {
     var
         that = this,
@@ -630,31 +840,161 @@ function performCalculations() {
     }
     var setOptions = RAID_LAST.setOptions;
     var pickedMovesLocal = raidAugmentPickedMoves(RAID_LAST.pickedMoves || []);
+    var isDefMode = (RAID_SETTINGS && RAID_SETTINGS.mode === 'findDefender');
     var calcBossDmg = $('#raid-setting-bossdmg').is(':checked');
-    // Toggle Boss Damage columns (indexes 4-7) based on setting
+
+    // Toggle Boss Damage columns (indexes 4-7): always visible in Defender mode
+    var bossColsVisible = isDefMode ? true : calcBossDmg;
     if (table) {
         for (var c = 4; c <= 7; c++) {
-            if (table.column(c)) {
-                table.column(c).visible(calcBossDmg);
-            }
+            try {
+                table.column(c).visible(bossColsVisible);
+            } catch (e) {}
         }
     }
     var dataSet = [];
+    // Reset hover meta for this run
+    RAID_ROW_META = {};
+    RAID_ROW_META_ID = 0;
+
     var pokeInfo = $("#p1");
+    // Attacker mode uses the same defender + field for all attacker rows; build once.
+    var raidFieldAtk = null;
+    var raidDefenderAtk = null;
+    if (!isDefMode) {
+        raidFieldAtk = createField();
+        raidDefenderAtk = createPokemon(pokeInfo);
+        raidFieldAtk.swap();
+        raidUpdateBossMoveHeaders(raidDefenderAtk);
+
+        if (raidDefenderAtk && raidDefenderAtk.ability === "Rivalry") raidDefenderAtk.gender = "N";
+    }
     for (var i = 0; i < setOptions.length; i++) {
         if (setOptions[i].id && typeof setOptions[i].id !== "undefined") {
+            // Defender Mode branch
+            if (isDefMode) {
+                var field = createField();
+                defender = createPokemon(pokeInfo);
+                raidUpdateBossMoveHeaders(defender);
+                var bossMoves = defender.moves || [];
+
+                var hasPhys = false;
+                var hasSpec = false;
+                for (var bi = 0; bi < bossMoves.length; bi++) {
+                    var bm = bossMoves[bi];
+                    if (!bm) continue;
+                    var c = String(bm.category || '').toLowerCase();
+                    if (c === 'physical') hasPhys = true;
+                    if (c === 'special') hasSpec = true;
+                }
+
+                var defProfiles = [];
+                if (hasPhys && hasSpec) defProfiles = [false, true]; // def and spdef
+                else if (hasSpec) defProfiles = [true];
+                else defProfiles = [false];
+
+                for (var dpi = 0; dpi < defProfiles.length; dpi++) {
+                    var isSpDef = defProfiles[dpi];
+
+                    var tank = raidCreatePokemonByName(setOptions[i].id);
+                    if (!tank) continue;
+
+                    tank = raidApplyDefProfile(tank, RAID_SETTINGS.defenderProfile || 'def_neutral', isSpDef);
+                    tank = raidApplyDefItems(tank, bossMoves);
+                    tank.level = defender.level;
+                    tank = raidRebuildPokemon(tank);
+
+                    var worstPct = 0;
+
+                    for (var bi2 = 0; bi2 < bossMoves.length; bi2++) {
+                        var bm2 = bossMoves[bi2];
+                        if (!bm2 || !bm2.name || bm2.name === '(No Move)') continue;
+
+                        var moveObj2 = raidBuildMove(gen, bm2.name);
+                        var r2 = calc.calculate(gen, defender, tank, moveObj2, field);
+
+                        var range2 = r2.range();
+                        var pct = Math.floor(range2[1] * 1000 / tank.maxHP()) / 10;
+                        if (pct > worstPct) worstPct = pct;
+                    }
+
+                    // Build row with EXACTLY 11 visible columns (0..10) + 1 hidden sort key
+                    var data = [];
+
+                    // 0 Attacker
+                    // data.push(raidEscHtml(tank.name));
+                    var rk = 'r' + (++RAID_ROW_META_ID);
+                    RAID_ROW_META[rk] = {
+                        name: tank.name,
+                        item: tank.item || '',
+                        ability: tank.ability || '',
+                        ivs: (tank.ivs || {hp:31, atk:31, def:31, spa:31, spd:31, spe:31}),
+                        evs: (tank.evs || {hp:0, atk:0, def:0, spa:0, spd:0, spe:0}),
+                        nature: tank.nature || '',
+                        move: '',
+                        stats: (tank.rawStats || tank.stats || {})
+                    };
+
+                    var displayName = tank.name;
+                    if (tank.item) {
+                        displayName += ' [' + tank.item + ']';
+                    }
+                    data.push('<span class="raid-mon" data-raidkey="' + rk + '">' + raidEscHtml(displayName) + '</span>');
+
+                    // 1 Best Move column reused as role label
+                    data.push(isSpDef ? 'SpD Tank' : 'Def Tank');
+
+                    // 2 Damage(%) column reused as Worst Hit%
+                    var worstStr = (Math.round(worstPct * 10) / 10).toFixed(1) + '%';
+                    data.push(worstStr);
+
+                    // 3 Ability
+                    data.push(tank.ability || '');
+
+                    // 4-7 Boss move damage% (boss -> tank) ALWAYS populated in defender mode
+                    for (var biOut = 0; biOut < 4; biOut++) {
+                        var bmOut = defender && defender.moves && defender.moves[biOut];
+                        var bmNameOut = bmOut && bmOut.name ? bmOut.name : '';
+                        if (!bmNameOut || bmNameOut === '(No Move)') {
+                            data.push('');
+                            continue;
+                        }
+                        var moveObjOut = raidBuildMove(gen, bmNameOut);
+                        var rOut = calc.calculate(gen, defender, tank, moveObjOut, field);
+
+                        var rangeOut = rOut.range();
+                        var hpOut = tank.maxHP();
+                        var minPctOut = Math.floor(rangeOut[0] * 1000 / hpOut) / 10;
+                        var maxPctOut = Math.floor(rangeOut[1] * 1000 / hpOut) / 10;
+                        data.push(minPctOut + ' - ' + maxPctOut + '%');
+                    }
+
+                    // 8 Base Speed
+                    data.push((tank.stats && tank.stats.spe != null) ? tank.stats.spe : '');
+
+                    // 9 Type1
+                    data.push((tank.types && tank.types[0]) ? tank.types[0] : '');
+
+                    // 10 Type2
+                    data.push((tank.types && tank.types[1]) ? tank.types[1] : '');
+
+                    // hidden sort key (worst hit)
+                    data.push(worstPct);
+
+                    dataSet.push(data);
+                }
+
+                continue;
+            }
+            // --- End Defender Mode branch ---
+
             // Raidalculate: ALWAYS generated attacker vs selected raid target (p1)
-            var field = createField();
+            var field = raidFieldAtk;
             attacker = raidCreatePokemonByName(setOptions[i].id);
             if (!attacker) continue; // skip invalid species
-            defender = createPokemon(pokeInfo);
-            field.swap();
-            raidUpdateBossMoveHeaders(defender);
+            defender = raidDefenderAtk;
             if (attacker.ability === "Rivalry") {
                 attacker.gender = "N";
-            }
-            if (defender.ability === "Rivalry") {
-                defender.gender = "N";
             }
             var presets = [null];
 
@@ -903,10 +1243,18 @@ function performCalculations() {
         }
     }
     var pokemon = defender;
-    if (pokemon) pokeInfo.find(".sp .totalMod").text(pokemon.stats.spe);
     // Sort dataSet descending by highestDamage (last column)
+    // dataSet.sort(function (a, b) {
+    //     return (Number(b[b.length - 1]) || 0) - (Number(a[a.length - 1]) || 0);
+    // });
+    var isDefMode = (RAID_SETTINGS && RAID_SETTINGS.mode === 'findDefender');
+// Sort dataSet:
+// - Attacker: descending by damage
+// - Defender: ascending by worst-hit
     dataSet.sort(function (a, b) {
-        return (Number(b[b.length - 1]) || 0) - (Number(a[a.length - 1]) || 0);
+        var av = Number(a[a.length - 1]) || 0;
+        var bv = Number(b[b.length - 1]) || 0;
+        return isDefMode ? (av - bv) : (bv - av);
     });
     // Drop the hidden sort key column before rendering
     for (var di = 0; di < dataSet.length; di++) {
@@ -920,7 +1268,8 @@ function performCalculations() {
     else table.column(1).search('');
 
     // Then sort + draw once
-    table.order([[2, 'desc']]).draw(); // column 2 is Damage%
+    // table.order([[2, 'desc']]).draw(); // column 2 is Damage%
+    table.order([[2, isDefMode ? 'asc' : 'desc']]).draw();
 
     // Hover on attacker name: Pokepaste-style block with Final Stats
     $('#holder-2 tbody')
@@ -1045,7 +1394,28 @@ function performCalculations() {
 }
 
 
+
 var table;
+
+// Loading indicator helper for Raidalculate button
+function raidSetLoading(isLoading) {
+    var $btn = $('.raid-calc-btn');
+    if (!$btn.length) return;
+
+    if (isLoading) {
+        if (!$btn.data('orig-text')) {
+            $btn.data('orig-text', $btn.text());
+        }
+        $btn.prop('disabled', true);
+        $btn.text('Calculating...');
+        $btn.css({ opacity: 0.7 });
+    } else {
+        var orig = $btn.data('orig-text') || 'Raidalculate';
+        $btn.prop('disabled', false);
+        $btn.text(orig);
+        $btn.css({ opacity: '' });
+    }
+}
 
 function constructDataTable() {
     table = $("#holder-2").DataTable({
@@ -1213,7 +1583,25 @@ function placeBsBtn() {
         "      <label class='btn btn-wide btn-mid' style='min-width:95px; text-align:center;' for='raid-atkprof-atk'>+Atk</label>" +
         "      <input class='visually-hidden' type='radio' name='raid-setting-attacker-nature' value='spe_neutralatk' id='raid-atkprof-spe' />" +
         "      <label class='btn btn-wide btn-right' style='min-width:95px; text-align:center;' for='raid-atkprof-spe'>+Spe</label>" +
+        "      <span id='raid-atkprof-evs' style='margin-left:10px; font-size:12px; opacity:.75; white-space:nowrap;'></span>" +
         "    </span>" +
+
+        // Defender Mode UI (Defender Nature + Def Items toggle)
+        "    <span id='raid-setting-defender-natures' style='white-space:nowrap; display:none; margin-left:18px;'>" +
+        "      <span style='margin-right:6px;'>Def Nature:</span>" +
+        "      <input class='visually-hidden' type='radio' name='raid-setting-defender-nature' value='def_slow' id='raid-defprof-slow' />" +
+        "      <label class='btn btn-wide btn-left' style='min-width:110px; text-align:center;' for='raid-defprof-slow'>+Def -Spe</label>" +
+        "      <input class='visually-hidden' type='radio' name='raid-setting-defender-nature' value='def_neutral' id='raid-defprof-neutral' checked />" +
+        "      <label class='btn btn-wide btn-mid' style='min-width:110px; text-align:center;' for='raid-defprof-neutral'>+Def</label>" +
+        "      <input class='visually-hidden' type='radio' name='raid-setting-defender-nature' value='def_speed' id='raid-defprof-speed' />" +
+        "      <label class='btn btn-wide btn-right' style='min-width:110px; text-align:center;' for='raid-defprof-speed'>+Spe</label>" +
+        "    </span>" +
+
+        "    <span id='raid-setting-def-items-wrap' style='white-space:nowrap; display:none; margin-left:12px;'>" +
+        "      <input class='visually-hidden' type='checkbox' id='raid-setting-defitems' checked />" +
+        "      <label class='btn btn-mid btn-wide' for='raid-setting-defitems' title='Enable Eviolite (non-final evolutions) and Assault Vest vs special bosses.'>Def Items</label>" +
+        "    </span>" +
+
 
         "  </div>" +
 
@@ -1241,7 +1629,7 @@ function placeBsBtn() {
             if ($label.length) $box.insertBefore($label);
             else $filter.prepend($box);
 
-            $box.append('<span style="white-space:nowrap;">Filter Move:</span>');
+            $box.append('<span id="raid-move-filter-label" style="white-space:nowrap;">Filter Move:</span>');
             $box.append('<select id="raid-move-filter" class="bs-btn bs-btn-default" style="max-width:220px;"></select>');
             $box.append('<span style="white-space:nowrap;">Speed:</span>');
             $box.append('<select id="raid-speed-filter" class="bs-btn bs-btn-default" style="max-width:160px;">' +
@@ -1285,24 +1673,35 @@ function placeBsBtn() {
         $('input[name="raid-mode-inline"][value="' + RAID_SETTINGS.mode + '"]').prop('checked', true);
         $('#raid-setting-bossdmg').prop('checked', !!RAID_SETTINGS.calcBossDamage);
         $('input[name="raid-setting-attacker-nature"][value="' + RAID_SETTINGS.attackerNatureProfile + '"]').prop('checked', true);
+        $('input[name="raid-setting-defender-nature"][value="' + RAID_SETTINGS.defenderProfile + '"]').prop('checked', true);
+        $('#raid-setting-defitems').prop('checked', !!RAID_SETTINGS.useDefItems);
 
         if (RAID_SETTINGS.mode === 'findAttacker') {
             $('#raid-setting-attacker-natures').show();
             $('#raid-setting-bossdmg-wrap').show();
+            $('#raid-setting-defender-natures').hide();
+            $('#raid-setting-def-items-wrap').hide();
         } else {
             $('#raid-setting-attacker-natures').hide();
             $('#raid-setting-bossdmg-wrap').hide();
+            $('#raid-setting-defender-natures').show();
+            $('#raid-setting-def-items-wrap').show();
         }
     }
 
     $(document)
-        .off('change.raidsettings', '#raid-setting-bossdmg, input[name="raid-mode-inline"], input[name="raid-setting-attacker-nature"]')
-        .on('change.raidsettings', '#raid-setting-bossdmg, input[name="raid-mode-inline"], input[name="raid-setting-attacker-nature"]', function () {
+        .off('change.raidsettings', '#raid-setting-bossdmg, #raid-setting-defitems, input[name="raid-mode-inline"], input[name="raid-setting-attacker-nature"], input[name="raid-setting-defender-nature"]')
+        .on('change.raidsettings', '#raid-setting-bossdmg, #raid-setting-defitems, input[name="raid-mode-inline"], input[name="raid-setting-attacker-nature"], input[name="raid-setting-defender-nature"]', function () {
             RAID_SETTINGS.calcBossDamage = $('#raid-setting-bossdmg').is(':checked');
+            RAID_SETTINGS.useDefItems = $('#raid-setting-defitems').is(':checked');
             RAID_SETTINGS.mode = $('input[name="raid-mode-inline"]:checked').val() || 'findAttacker';
-            RAID_SETTINGS.attackerNatureProfile = $('input[name="raid-setting-attacker-nature"]:checked').val() || 'atk_slow';
+            RAID_SETTINGS.attackerNatureProfile = $('input[name="raid-setting-attacker-nature"]:checked').val() || 'atk_neutral';
+            RAID_SETTINGS.defenderProfile = $('input[name="raid-setting-defender-nature"]:checked').val() || 'def_neutral';
             raidRefreshSettingsUI();
         });
+// Ensure defender settings defaults exist
+if (!RAID_SETTINGS.defenderProfile) RAID_SETTINGS.defenderProfile = 'def_neutral';
+if (RAID_SETTINGS.useDefItems === undefined) RAID_SETTINGS.useDefItems = true;
 
     raidRefreshSettingsUI();
     try {
@@ -1520,8 +1919,16 @@ function placeBsBtn() {
             opts.sort(function (a, b) {
                 return b._score - a._score;
             });
-            if (opts.length > 300) opts = opts.slice(0, 300);
-            for (var j = 0; j < opts.length; j++) delete opts[j]._score;
+            var isDefMode = (RAID_SETTINGS && RAID_SETTINGS.mode === 'findDefender');
+            if (isDefMode) {
+                // Full pool: stable sort by name, NO SLICE
+                opts.sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+            } else {
+                // Attacker mode: keep your cap
+                opts.sort(function (a, b) { return b._score - a._score; });
+                if (opts.length > 300) opts = opts.slice(0, 300);
+                for (var j = 0; j < opts.length; j++) delete opts[j]._score;
+            }
 
             RAID_LAST.setOptions = opts;
         })();
@@ -1531,7 +1938,22 @@ function placeBsBtn() {
         $('#raid-speed-filter').val('');
         RAID_SPEED_FILTER = "";
         table.clear();
-        performCalculations();
+
+        var $btn = $(this);
+        var origText = $btn.text();
+        $btn.prop('disabled', true);
+        $btn.text('Calculating...');
+        $btn.css({ opacity: 0.7 });
+
+        setTimeout(function () {
+            try {
+                performCalculations();
+            } finally {
+                $btn.prop('disabled', false);
+                $btn.text(origText);
+                $btn.css({ opacity: '' });
+            }
+        }, 0);
     });
 
     // Debug info button (hover to show last raidalculate summary)
@@ -1686,6 +2108,9 @@ $(document).ready(function () {
     calcDTDimensions();
     constructDataTable();
     placeBsBtn();
+    raidBindModeToggleUI();
+    raidSyncModeUI();
+
 });
 
 /**
@@ -1709,3 +2134,4 @@ function calcDTDimensions() {
     dtWidth = $(window).width() - $("#holder-2").offset().left;
     dtWidth -= 2 * parseFloat($(".holder-0").css("padding-right"));
 }
+
