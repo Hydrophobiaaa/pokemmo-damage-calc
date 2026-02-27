@@ -40,9 +40,13 @@ function calculateBWXY(gen, attacker, defender, move, field) {
     if (move.category === 'Status' && !move.named('Nature Power')) {
         return result;
     }
+    // Protect: in normal modes it blocks damage, but in Raid mode it reduces damage by 75% (takes 25%).
     if (field.defenderSide.isProtected && !move.breaksProtect) {
         desc.isProtected = true;
-        return result;
+        if (field.gameType !== 'Raid') {
+            return result;
+        }
+        // Raid mode: continue and apply a 0.25 modifier later.
     }
     if (attacker.hasAbility('Mold Breaker', 'Teravolt', 'Turboblaze')) {
         defender.ability = '';
@@ -262,6 +266,11 @@ function calculateBWXY(gen, attacker, defender, move, field) {
     desc.isBurned = applyBurn;
     var finalMods = calculateFinalModsBWXY(gen, attacker, defender, move, field, desc, isCritical, typeEffectiveness);
     var finalMod = (0, util_2.chainMods)(finalMods, 41, 131072);
+    // Raid Protect modifier: take 25% damage while protected
+    if (field.gameType === 'Raid' && desc.isProtected && field.defenderSide.isProtected && !move.breaksProtect) {
+        // 0.25 in 4096-based mod space
+        finalMod = (0, util_2.chainMods)([finalMod, 1024], 41, 131072);
+    }
     var isSpread = field.gameType !== 'Singles' &&
         ['allAdjacent', 'allAdjacentFoes'].includes(move.target);
     var childDamage;
