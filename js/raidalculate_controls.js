@@ -43,84 +43,74 @@ var RAID_MON_EXCLUSIONS = [
 ];
 
 
-// Custom Raid sets (normal builder format)
+// Custom Raid sets: indexed by species, then set name
 var RAID_CUSTOM_SETS = {
-    "[Raid] Cobalion 6⭐": {
-        name: "Cobalion",
-        level: 100,
-        ability: "Justified",
-        item: "Expert Belt",
-        nature: "Hardy",
-        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
-        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
-        baseStats: {
-            hp: 910,
-            atk: 225,
-            def: 1290,
-            spa: 225,
-            spd: 720,
-            spe: 108
-        },
-        moves: ["Air Slash", "Sacred Sword", "Flash Cannon", "Stone Edge"]
+    "Cobalion": {
+        "Raid 6⭐": {
+            level: 100,
+            ability: "Justified",
+            item: "Expert Belt",
+            nature: "Hardy",
+            ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+            evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
+            baseStats: { hp:910, atk:225, def:1290, spa:225, spd:720, spe:108 },
+            moves: ["Air Slash","Sacred Sword","Flash Cannon","Stone Edge"]
+        }
     },
-    "[Raid] Terrakion 6⭐": {
-        name: "Terrakion",
-        level: 100,
-        ability: "Justified",
-        item: "Lum Berry",
-        nature: "Hardy",
-        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
-        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
-        baseStats: {
-            hp: 910,
-            atk: 322,
-            def: 900,
-            spa: 180,
-            spd: 900,
-            spe: 108
-        },
-        moves: ["Stone Edge", "Sacred Sword", "Earthquake", "Poison Jab"]
+    "Terrakion": {
+        "Raid 6⭐": {
+            level: 100,
+            ability: "Justified",
+            item: "Lum Berry",
+            nature: "Hardy",
+            ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+            evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
+            baseStats: { hp:910, atk:322, def:900, spa:180, spd:900, spe:108 },
+            moves: ["Stone Edge","Sacred Sword","Earthquake","Poison Jab"]
+        }
     },
-
-    "[Raid] Virizion 6⭐": {
-        name: "Virizion",
-        level: 100,
-        ability: "Justified",
-        item: "Liechi Berry",
-        nature: "Hardy",
-        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
-        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
-        baseStats: {
-            hp: 910,
-            atk: 225,
-            def: 720,
-            spa: 225,
-            spd: 1290,
-            spe: 108
-        },
-        moves: ["Stone Edge", "Stone Edge", "X-Scissor", "Sacred Sword"]
+    "Virizion": {
+        "Raid 6⭐": {
+            level: 100,
+            ability: "Justified",
+            item: "Liechi Berry",
+            nature: "Hardy",
+            ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+            evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
+            baseStats: { hp:910, atk:225, def:720, spa:225, spd:1290, spe:108 },
+            moves: ["Stone Edge","Stone Edge","X-Scissor","Sacred Sword"]
+        }
     },
-
-    "[Raid] Keldeo 6⭐": {
-        name: "Keldeo",
-        level: 100,
-        ability: "Justified",
-        item: "Leftovers",
-        nature: "Hardy",
-        ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
-        evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:0 },
-        baseStats: {
-            hp: 910,
-            atk: 180,
-            def: 900,
-            spa: 322,
-            spd: 900,
-            spe: 108
-        },
-        moves: ["Surf", "Secret Sword", "Ice Beam", "Air Slash"]
+    "Keldeo": {
+        "Raid 6⭐": {
+            level: 100,
+            ability: "Justified",
+            item: "Leftovers",
+            nature: "Hardy",
+            ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+            evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:0 },
+            baseStats: { hp:910, atk:180, def:900, spa:322, spd:900, spe:108 },
+            moves: ["Surf","Secret Sword","Ice Beam","Air Slash"]
+        }
     }
-
 };
+
+// Helper to append custom RAID sets for a species to a sets array
+function raidAppendCustomSetsToSpecies(speciesName, setsArray) {
+    var raidSets = RAID_CUSTOM_SETS[speciesName];
+    if (!raidSets) return setsArray;
+
+    Object.keys(raidSets).forEach(function(setName) {
+        setsArray.push({
+            name: setName,
+            isRaid: true
+        });
+    });
+
+    return setsArray;
+}
+
+
 
 
 function raidSyncModeUI() {
@@ -2110,6 +2100,95 @@ $(document).ready(function () {
     placeBsBtn();
     raidBindModeToggleUI();
     raidSyncModeUI();
+
+    // --- Inject RAID_CUSTOM_SETS into existing setdex dropdown (no other files touched) ---
+    (function injectRaidSetsIntoSetdex() {
+        if (typeof window === "undefined") return;
+        if (!window.setdex) return;
+        if (typeof RAID_CUSTOM_SETS === "undefined") return;
+
+        Object.keys(RAID_CUSTOM_SETS).forEach(function (species) {
+            if (!window.setdex[species]) return;
+
+            var raidSetsForSpecies = RAID_CUSTOM_SETS[species];
+            Object.keys(raidSetsForSpecies).forEach(function (setName) {
+                // Avoid duplicates if already injected
+                if (window.setdex[species][setName]) return;
+
+                window.setdex[species][setName] = {
+                    ability: raidSetsForSpecies[setName].ability,
+                    item: raidSetsForSpecies[setName].item,
+                    nature: raidSetsForSpecies[setName].nature,
+                    level: raidSetsForSpecies[setName].level,
+                    evs: raidSetsForSpecies[setName].evs,
+                    ivs: raidSetsForSpecies[setName].ivs,
+                    moves: raidSetsForSpecies[setName].moves,
+                    baseStats: raidSetsForSpecies[setName].baseStats,
+                    isCustomRaid: true
+                };
+            });
+        });
+    })();
+
+    // --- Apply custom raid baseStats / IVs / EVs after set selection ---
+    $(document)
+        .off('change.raidcustomapply', '.set-selector')
+        .on('change.raidcustomapply', '.set-selector', function () {
+            var val = $(this).val();
+            if (!val || typeof RAID_CUSTOM_SETS === "undefined") return;
+
+            // Expect format: "Species (Set Name)"
+            var match = val.match(/^(.+?) \((.+)\)$/);
+            if (!match) return;
+
+            var species = match[1];
+            var setName = match[2];
+
+            if (!RAID_CUSTOM_SETS[species]) return;
+            if (!RAID_CUSTOM_SETS[species][setName]) return;
+
+            var raidSet = RAID_CUSTOM_SETS[species][setName];
+
+            // Delay to let default setdex apply first
+            setTimeout(function () {
+                var $p1 = $("#p1");
+                if (!$p1.length) return;
+
+                var statsOrder = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+                var rowClasses = {
+                    hp: 'hp',
+                    atk: 'at',
+                    def: 'df',
+                    spa: 'sa',
+                    spd: 'sd',
+                    spe: 'sp'
+                };
+
+                statsOrder.forEach(function (key) {
+                    var rowClass = rowClasses[key];
+                    var $row = $p1.find('tr.' + rowClass);
+                    if (!$row.length) return;
+
+                    // Base stats
+                    if (raidSet.baseStats && raidSet.baseStats[key] != null) {
+                        $row.find('input.base').val(raidSet.baseStats[key]);
+                    }
+
+                    // IVs
+                    if (raidSet.ivs && raidSet.ivs[key] != null) {
+                        $row.find('input.ivs').val(raidSet.ivs[key]);
+                    }
+
+                    // EVs
+                    if (raidSet.evs && raidSet.evs[key] != null) {
+                        $row.find('input.evs').val(raidSet.evs[key]);
+                    }
+                });
+
+                // Force recalculation
+                $p1.find('.calc-trigger').first().trigger('keyup');
+            }, 0);
+        });
 
 });
 
