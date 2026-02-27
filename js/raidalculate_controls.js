@@ -2185,9 +2185,25 @@ $(document).ready(function () {
                     }
                 });
 
-                // Force recalculation
-                $p1.find('.calc-trigger').first().trigger('keyup');
+                // Recalculate like the normal calculator does
+                // 1) update EV sum (existing handlers are bound to keyup/change)
+                $p1.find('input.evs, input.ivs').trigger('input').trigger('change').trigger('keyup');
+
+                // 2) update stat totals + stage-mod values via the native functions
+                try { calcHP($p1); } catch (e) {}
+                try { calcStats($p1); } catch (e) {}
+
+                // 3) keep ability/item side-effects consistent
+                try { $p1.find('.ability').trigger('change'); } catch (e) {}
+                try { $p1.find('.item').trigger('change'); } catch (e) {}
             }, 0);
+        });
+
+    // Keep totals + totalMod in sync when stat stages change (uses native calcStats)
+    $(document)
+        .off('change.raidboostsync', '#p1 select.boost')
+        .on('change.raidboostsync', '#p1 select.boost', function () {
+            try { calcStats($('#p1')); } catch (e) {}
         });
 
 });

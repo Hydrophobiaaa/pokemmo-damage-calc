@@ -1276,6 +1276,17 @@ function calcStat(poke, StatID) {
 		total *= 2;
 	}
 	stat.find(".total").text(total);
+
+	// Update stage-modified speed display (the extra column showing final speed after boosts)
+	if (StatID === "sp") {
+		var $tm = stat.find(".totalMod");
+		if ($tm.length) {
+			var stage = ~~stat.find("select.boost").val();
+			var mult = stage >= 0 ? (2 + stage) / 2 : 2 / (2 - stage);
+			$tm.text(String(Math.floor(total * mult)));
+		}
+	}
+
 	return total;
 }
 
