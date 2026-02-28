@@ -340,7 +340,7 @@ function raidEnsureSpeedFilterHook() {
         var pass = true;
         if (RAID_SPEED_FILTER === "faster") pass = Number(sp) > t;
         else if (RAID_SPEED_FILTER === "slower") pass = Number(sp) < t;
-        
+
         return pass;
     });
 }
@@ -396,6 +396,8 @@ function raidIndexMonsters(monstersArr) {
         var m = monstersArr[i];
         var name = raidNormName(m && m.name);
         if (!name) continue;
+        // Skip explicitly-unobtainable entries so duplicates (e.g. Darmanitan) don't override/poison the obtainable one
+        if (m && m.obtainable === false) continue;
 
         var types = raidMonsterTypesFromJson(m.types);
         var stats = (m && m.stats) ? m.stats : {};
@@ -419,7 +421,7 @@ function raidIndexMonsters(monstersArr) {
             learnset: raidBuildLearnset(m),
             abilities: raidBuildAbilities(m),
             evolutions: evolutions,
-            obtainable: !!m.obtainable,
+            obtainable: (m.obtainable !== false),
         };
     }
     return idx;
@@ -463,7 +465,7 @@ async function raidEnsureMonstersLoaded() {
                         existing.learnset.add(mv);
                     });
                 }
-                existing.obtainable = existing.obtainable && mon.obtainable
+                existing.obtainable = (existing.obtainable !== false) || (mon.obtainable !== false);
                 // merge abilities
                 existing.abilities = raidUniq((existing.abilities || []).concat(mon.abilities || []));
                 // merge evolutions
