@@ -340,36 +340,7 @@ function raidEnsureSpeedFilterHook() {
         var pass = true;
         if (RAID_SPEED_FILTER === "faster") pass = Number(sp) > t;
         else if (RAID_SPEED_FILTER === "slower") pass = Number(sp) < t;
-
-    // Optional debug logging (throttled)
-    // Enable in devtools: window.RAID_DEBUG_SPEED = true
-        try {
-            if (window.RAID_DEBUG_SPEED) {
-                window.__raidSpeedLogTs = window.__raidSpeedLogTs || 0;
-                var now = Date.now();
-                if ((now - window.__raidSpeedLogTs) > 800) {
-                    window.__raidSpeedLogTs = now;
-                    var fdbg = raidGetSpeedFieldSwappedCached();
-                    console.log('[RAID][SPEEDFILTER]', {
-                        mode: RAID_SPEED_FILTER,
-                        target: t,
-                        row: Number(sp),
-                        pass: pass,
-                        targetSide: 'attacker',   // boss is left side
-                        rowSide: 'defender',      // candidates are right side
-                        field: {
-                            weather: fdbg && fdbg.weather,
-                            terrain: fdbg && fdbg.terrain,
-                            pseudoWeather: fdbg && fdbg.pseudoWeather,
-                            tailwindL: (fdbg && fdbg.attackerSide && fdbg.attackerSide.isTailwind) || (fdbg && fdbg.sides && fdbg.sides[0] && fdbg.sides[0].isTailwind),
-                            tailwindR: (fdbg && fdbg.defenderSide && fdbg.defenderSide.isTailwind) || (fdbg && fdbg.sides && fdbg.sides[1] && fdbg.sides[1].isTailwind),
-                        },
-                        hasGetFinalSpeed: !!(window.calc && typeof window.calc.getFinalSpeed === 'function')
-                    });
-                }
-            }
-        } catch (eDbg) {}
-
+        
         return pass;
     });
 }
