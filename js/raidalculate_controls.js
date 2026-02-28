@@ -5,6 +5,7 @@ var RAID_MON_INDEX_RESOLVED = null; // resolvedName -> merged mon entry
 var RAID_LAST = null;        // last computed raidalculate result
 var RAID_FORCE_PRESET = null; // null | { item: 'Choice Band' | 'Choice Specs' }
 var RAID_SPEED_FILTER = ""; // "" | "faster" | "slower"
+var RAID_SPEED_CACHE = { ts: 0, key: '', field: null, swapped: false, targetSpeed: null };
 
 // --- Raidalculate UI settings (UI only for now; logic later) ---
 var RAID_SETTINGS = {
@@ -55,6 +56,18 @@ var RAID_CUSTOM_SETS = {
             evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:252 },
             baseStats: { hp:910, atk:225, def:1290, spa:225, spd:720, spe:108 },
             moves: ["Air Slash","Sacred Sword","Flash Cannon","Stone Edge"]
+        }
+    },
+    "Excadrill": {
+        "Raid 4⭐": {
+            level: 80,
+            ability: "Sand Rush",
+            item: "White Herb",
+            nature: "Hardy",
+            ivs: { hp:31, atk:31, def:31, spa:31, spd:31, spe:31 },
+            evs: { hp:0, atk:0, def:0, spa:0, spd:0, spe:192 },
+            baseStats: { hp:1110, atk:270, def:489, spa:225, spd:520, spe:88 },
+            moves: ["Earthquake","","",""]
         }
     },
     "Terrakion": {
@@ -152,18 +165,128 @@ function raidUniq(arr) {
     return Array.from(new Set((arr || []).filter(Boolean)));
 }
 
+function raidTryGetFinalSpeed(pkmn, field, side) {
+    // Normalize side string -> actual Side object
+    try {
+        if (field && typeof side === 'string') {
+            const s = side.toLowerCase();
+            if (s === 'attacker') side = field.attackerSide || (field.sides && field.sides[0]) || side;
+            if (s === 'defender') side = field.defenderSide || (field.sides && field.sides[1]) || side;
+        }
+    } catch (e) {}
+    try {
+        if (calc && typeof calc.getFinalSpeed === 'function') {
+            try { return Number(calc.getFinalSpeed(gen, pkmn, field, side)); } catch (e0) {}
+            try { return Number(calc.getFinalSpeed(pkmn, field, side)); } catch (e1) {}
+            try { return Number(calc.getFinalSpeed(gen, pkmn, field)); } catch (e2) {}
+            try { return Number(calc.getFinalSpeed(pkmn, field)); } catch (e3) {}
+            try { return Number(calc.getFinalSpeed(pkmn)); } catch (e4) {}
+        }
+    } catch (e) {}
+
+    try {
+        if (pkmn?.rawStats?.spe != null) return Number(pkmn.rawStats.spe);
+        if (pkmn?.stats?.spe != null) return Number(pkmn.stats.spe);
+    } catch (e5) {}
+    return null;
+}
+
+function raidGetSpeedFieldCacheKey() {
+    // Key does not need to be perfect; it just prevents obvious stale caches.
+    // Includes speed filter + a few common field inputs.
+    var w = $('#weather').val() || '';
+    var t = $('#terrain').val() || '';
+    var twL = $('#tailwindL').is(':checked') ? '1' : '0';
+    var twR = $('#tailwindR').is(':checked') ? '1' : '0';
+    return String(RAID_SPEED_FILTER || '') + '|' + w + '|' + t + '|' + twL + '|' + twR;
+}
+
+function raidGetSpeedFieldSwappedCached() {
+    var key = raidGetSpeedFieldCacheKey();
+    var now = Date.now();
+
+    // refresh at most ~4 times/second, or when key changes
+    if (!RAID_SPEED_CACHE.field || RAID_SPEED_CACHE.key !== key || (now - (RAID_SPEED_CACHE.ts || 0)) > 250) {
+        var f = createField();
+        // In attacker-mode calcs we swap once; do the same here so speeds match raid calculations.
+        // try { if (f && typeof f.swap === 'function') { f.swap(); } } catch (e) {}
+        RAID_SPEED_CACHE = { ts: now, key: key, field: f, swapped: false, targetSpeed: null };
+    }
+    return RAID_SPEED_CACHE.field;
+}
+
+function raidComputeFinalSpeedForMonName(monName, opts) {
+    try {
+        var p = raidCreatePokemonByName(monName);
+        if (!p) return null;
+        opts = opts || {};
+        if (opts.level != null) p.level = opts.level;
+        if (opts.nature) p.nature = opts.nature;
+        if (opts.item != null) p.item = opts.item;
+        if (opts.ability != null) p.ability = opts.ability;
+        if (opts.ivs) p.ivs = $.extend({}, p.ivs || {}, opts.ivs);
+        if (opts.evs) p.evs = $.extend({}, p.evs || {}, opts.evs);
+        p = raidRebuildPokemon(p);
+        var field = raidGetSpeedFieldSwappedCached();
+        return raidTryGetFinalSpeed(p, field);
+    } catch (e) {
+        return null;
+    }
+}
+
+function raidUpdateP1SpeedTotalMod() {
+    try {
+        const $p1 = $("#p1");
+        if (!$p1.length) return;
+
+        const boss = createPokemon($p1);
+        const field = createField();
+        const side = field.attackerSide || (field.sides && field.sides[0]);
+
+        if (!window.calc || typeof calc.getFinalSpeed !== "function") return;
+
+        let sp = null;
+        try { sp = Number(calc.getFinalSpeed(gen, boss, field, side)); } catch (e0) {}
+        if (sp == null || isNaN(sp)) {
+            try { sp = Number(calc.getFinalSpeed(boss, field, side)); } catch (e1) {}
+        }
+        if (sp == null || isNaN(sp)) return;
+
+        const $tm = $p1.find(".sp .totalMod");
+        if ($tm.length) $tm.text(String(Math.floor(sp)));
+    } catch (e) {}
+}
+
 
 function raidGetTargetSpeed() {
-    // Prefer cached target speed from last Raidalculate run
-    if (RAID_LAST && typeof RAID_LAST.targetSpeed === "number" && !isNaN(RAID_LAST.targetSpeed)) return RAID_LAST.targetSpeed;
+    // cache key MUST include field state
+    const key = raidGetSpeedFieldCacheKey();
+    if (RAID_SPEED_CACHE && RAID_SPEED_CACHE.key === key &&
+        typeof RAID_SPEED_CACHE.targetSpeed === "number" && !isNaN(RAID_SPEED_CACHE.targetSpeed)) {
+        return RAID_SPEED_CACHE.targetSpeed;
+    }
 
-    // Fallback: read from current P1
     try {
-        var p = createPokemon($("#p1"));
-        var s = (p && p.rawStats && p.rawStats.spe != null) ? Number(p.rawStats.spe)
-            : (p && p.stats && p.stats.spe != null) ? Number(p.stats.spe)
-                : NaN;
-        return isNaN(s) ? null : s;
+        const boss = createPokemon($("#p1"));
+        if (!boss) return null;
+
+        const field = createField(); // IMPORTANT: build ONCE
+        const side = field.attackerSide || (field.sides && field.sides[0]) || undefined;
+
+        let sp = null;
+        if (window.calc && typeof calc.getFinalSpeed === "function") {
+            try { sp = Number(calc.getFinalSpeed(gen, boss, field, side)); } catch (e0) {}
+            if (sp == null || isNaN(sp)) {
+                try { sp = Number(calc.getFinalSpeed(boss, field, side)); } catch (e1) {}
+            }
+        }
+
+        if (sp == null || isNaN(sp)) return null;
+
+        // store under current key
+        RAID_SPEED_CACHE.key = key;
+        RAID_SPEED_CACHE.targetSpeed = sp;
+        return sp;
     } catch (e) {
         return null;
     }
@@ -182,13 +305,72 @@ function raidEnsureSpeedFilterHook() {
         var t = raidGetTargetSpeed();
         if (t == null) return true;
 
-        // Speed column index = 4
-        var sp = Number(data[4]);
-        if (isNaN(sp)) return true;
+        // Prefer field-aware final speed using the row meta (if present)
+        var sp = null;
+        try {
+            var cell0 = String(data[0] || '');
+            var m = cell0.match(/data-raidkey="([^"]+)"/);
+            var rk = m && m[1] ? m[1] : null;
+            var meta = rk && RAID_ROW_META ? RAID_ROW_META[rk] : null;
+            if (meta && meta.name) {
+                // Match level to the current target (boss) if we can
+                var lvl = null;
+                try {
+                    var boss = createPokemon($("#p1"));
+                    if (boss && boss.level != null) lvl = boss.level;
+                } catch (eBoss) {}
 
-        if (RAID_SPEED_FILTER === "faster") return sp > t;
-        if (RAID_SPEED_FILTER === "slower") return sp < t;
-        return true;
+                sp = raidComputeFinalSpeedForMonName(meta.name, {
+                    level: lvl,
+                    nature: meta.nature,
+                    item: meta.item,
+                    ability: meta.ability,
+                    ivs: meta.ivs,
+                    evs: meta.evs
+                });
+            }
+        } catch (eMeta) {}
+
+        // Fallback: use displayed Speed (column index = 8)
+        if (sp == null || isNaN(Number(sp))) {
+            sp = Number(data[8]);
+        }
+        if (isNaN(Number(sp))) return true;
+
+        var pass = true;
+        if (RAID_SPEED_FILTER === "faster") pass = Number(sp) > t;
+        else if (RAID_SPEED_FILTER === "slower") pass = Number(sp) < t;
+
+    // Optional debug logging (throttled)
+    // Enable in devtools: window.RAID_DEBUG_SPEED = true
+        try {
+            if (window.RAID_DEBUG_SPEED) {
+                window.__raidSpeedLogTs = window.__raidSpeedLogTs || 0;
+                var now = Date.now();
+                if ((now - window.__raidSpeedLogTs) > 800) {
+                    window.__raidSpeedLogTs = now;
+                    var fdbg = raidGetSpeedFieldSwappedCached();
+                    console.log('[RAID][SPEEDFILTER]', {
+                        mode: RAID_SPEED_FILTER,
+                        target: t,
+                        row: Number(sp),
+                        pass: pass,
+                        targetSide: 'attacker',   // boss is left side
+                        rowSide: 'defender',      // candidates are right side
+                        field: {
+                            weather: fdbg && fdbg.weather,
+                            terrain: fdbg && fdbg.terrain,
+                            pseudoWeather: fdbg && fdbg.pseudoWeather,
+                            tailwindL: (fdbg && fdbg.attackerSide && fdbg.attackerSide.isTailwind) || (fdbg && fdbg.sides && fdbg.sides[0] && fdbg.sides[0].isTailwind),
+                            tailwindR: (fdbg && fdbg.defenderSide && fdbg.defenderSide.isTailwind) || (fdbg && fdbg.sides && fdbg.sides[1] && fdbg.sides[1].isTailwind),
+                        },
+                        hasGetFinalSpeed: !!(window.calc && typeof window.calc.getFinalSpeed === 'function')
+                    });
+                }
+            }
+        } catch (eDbg) {}
+
+        return pass;
     });
 }
 
@@ -197,6 +379,8 @@ function raidBindSpeedFilter() {
         .off("change.raidspeed", "#raid-speed-filter")
         .on("change.raidspeed", "#raid-speed-filter", function () {
             RAID_SPEED_FILTER = $(this).val() || "";
+            // invalidate cached target speed so field/filters are re-read
+            if (RAID_SPEED_CACHE) RAID_SPEED_CACHE.targetSpeed = null;
             if (table) table.draw(); // filter only, no recalc
         });
 }
@@ -716,6 +900,8 @@ function raidRebuildPokemon(p) {
         abilityOn = true;
     }
 
+    // var abilityOn = (typeof p.abilityOn === 'boolean') ? p.abilityOn : true;
+
     return new calc.Pokemon(gen, p.name, {
         level: p.level || defaultLevel || 100,
         ability: p.ability || "",
@@ -959,8 +1145,13 @@ function performCalculations() {
                         data.push(minPctOut + ' - ' + maxPctOut + '%');
                     }
 
-                    // 8 Base Speed
-                    data.push((tank.stats && tank.stats.spe != null) ? tank.stats.spe : '');
+                    // 8 Speed (field-aware when possible)
+                    var spFinalTank = raidTryGetFinalSpeed(tank, field, 'defender');
+                    if (spFinalTank == null || isNaN(Number(spFinalTank))) {
+                        spFinalTank = (tank.stats && tank.stats.spe != null) ? tank.stats.spe : '';
+                    }
+                    data.push(spFinalTank);
+                    RAID_ROW_META[rk].finalSpeed = spFinalTank;
 
                     // 9 Type1
                     data.push((tank.types && tank.types[0]) ? tank.types[0] : '');
@@ -1214,9 +1405,15 @@ function performCalculations() {
                         }
                     }
 
-                    // 8 Base Speed
-                    var spdObj = raidNormStatsObj((best.tmpAtk && (best.tmpAtk.rawStats || best.tmpAtk.stats)) ? (best.tmpAtk.rawStats || best.tmpAtk.stats) : (attacker.rawStats || attacker.stats));
-                    data.push(spdObj.spe != null ? spdObj.spe : "");
+                    // 8 Speed (field-aware when possible)
+                    var spFinalAtk = raidTryGetFinalSpeed(best.tmpAtk, raidGetSpeedFieldSwappedCached(), 'defender');
+                    if (spFinalAtk == null || isNaN(Number(spFinalAtk))) {
+                        spFinalAtk =
+                            (attacker.stats && attacker.stats.spe != null) ? attacker.stats.spe :
+                                (attacker.rawStats && attacker.rawStats.spe != null) ? attacker.rawStats.spe : '';
+                    }
+                    data.push(spFinalAtk);
+                    RAID_ROW_META[raidKey].finalSpeed = spFinalAtk;
 
                     // 9 Type1
                     data.push(attacker.types[0] || "");
@@ -1658,6 +1855,9 @@ function placeBsBtn() {
     raidPopulateMoveFilter();
     raidBindMoveFilter();
     raidBindSpeedFilter();
+    $(document).on("change input", ".calc-trigger", function () {
+        if (window.RAID_SPEED_CACHE) RAID_SPEED_CACHE.targetSpeed = null;
+    });
 
     function raidRefreshSettingsUI() {
         $('input[name="raid-mode-inline"][value="' + RAID_SETTINGS.mode + '"]').prop('checked', true);
@@ -2100,6 +2300,18 @@ $(document).ready(function () {
     placeBsBtn();
     raidBindModeToggleUI();
     raidSyncModeUI();
+
+    $(document).on(
+        "change input",
+        'input:radio[name="weather"], input:radio[name="gscWeather"], #tailwindL, #tailwindR, #abilityL1, #itemL1, #statusL1, #levelL1, #natureL1',
+        function () {
+            // wait until shared_controls has done its normal updates
+            setTimeout(raidUpdateP1SpeedTotalMod, 0);
+        }
+    );
+
+// initial paint
+    $(function () { setTimeout(raidUpdateP1SpeedTotalMod, 0); });
 
     // --- Inject RAID_CUSTOM_SETS into existing setdex dropdown (no other files touched) ---
     (function injectRaidSetsIntoSetdex() {
