@@ -40,7 +40,8 @@ var RAID_MON_EXCLUSIONS = [
     "Mewtwo",
     "Keldeo",
     "Arceus",
-    "Lugia"
+    "Lugia",
+    "Darmanitan-Zen",
 ];
 
 
@@ -529,16 +530,39 @@ function raidPopover(msg, width) {
     }, 1350);
 }
 
+// Some forms have signature moves not present on the base species in monsters.json.
+// Extend learnset checks for those forms so picked-move filtering matches actual form learnability.
+function raidExtraFormMoves(resolvedName) {
+    var n = String(resolvedName || '');
+    // Rotom appliance signature moves
+    if (n === 'Rotom-Wash') return new Set(['Hydro Pump']);
+    if (n === 'Rotom-Heat') return new Set(['Overheat']);
+    if (n === 'Rotom-Frost') return new Set(['Blizzard']);
+    if (n === 'Rotom-Fan') return new Set(['Air Slash']);
+    if (n === 'Rotom-Mow') return new Set(['Leaf Storm']);
+    return null;
+}
+
 function raidGetLearnableMovesForMon(monName, moveList) {
     if (!RAID_MON_INDEX_RESOLVED) return [];
     var key = raidResolveSpeciesName(monName);
+    var resolved = key;
+    var extra = raidExtraFormMoves(resolved);
+    // If this is a form (e.g. Rotom-Wash) and monsters index doesn't have it, fall back to base (Rotom)
+    if (RAID_MON_INDEX_RESOLVED && key && !RAID_MON_INDEX_RESOLVED[key]) {
+        var dash = key.indexOf('-');
+        if (dash > 0) {
+            var base = key.slice(0, dash);
+            if (RAID_MON_INDEX_RESOLVED[base]) key = base;
+        }
+    }
     var mon = RAID_MON_INDEX_RESOLVED[key];
     if (!mon || !mon.learnset) return [];
     var out = [];
     for (var i = 0; i < (moveList || []).length; i++) {
         var mv = moveList[i];
         if (!mv || !mv.name) continue;
-        if (mon.learnset.has(mv.name)) out.push(mv);
+        if ((mon.learnset && mon.learnset.has(mv.name)) || (extra && extra.has(mv.name))) out.push(mv);
     }
     return out;
 }
@@ -603,6 +627,24 @@ function raidResolveSpeciesName(name) {
         }
     }
     return n;
+}
+
+function raidExpandPokedexForms(speciesName) {
+    const base = raidResolveSpeciesName(speciesName);
+    const out = [];
+    if (!base) return out;
+    out.push(base);
+
+    try {
+        if (window.pokedex) {
+            const pref = base + "-";
+            for (const k of Object.keys(pokedex)) {
+                if (k && k.startsWith(pref)) out.push(k);
+            }
+        }
+    } catch (e) {}
+
+    return raidUniq(out);
 }
 
 
@@ -990,6 +1032,69 @@ function performCalculations() {
     var setOptions = RAID_LAST.setOptions;
     var pickedMovesLocal = raidAugmentPickedMoves(RAID_LAST.pickedMoves || []);
     var isDefMode = (RAID_SETTINGS && RAID_SETTINGS.mode === 'findDefender');
+
+    // Expand alternate forms in Defender mode (e.g. Rotom-Wash)
+    if (isDefMode) {
+        var expanded = [];
+        var seenForms = {};
+
+        for (var si = 0; si < setOptions.length; si++) {
+            var baseName = setOptions[si] && setOptions[si].id;
+            if (!baseName) continue;
+
+            var forms = raidExpandPokedexForms(baseName);
+            for (var fi = 0; fi < forms.length; fi++) {
+                var fn = forms[fi];
+                if (!fn || seenForms[fn]) continue;
+                if (RAID_MON_EXCLUSIONS && RAID_MON_EXCLUSIONS.indexOf(fn) !== -1) continue;
+                seenForms[fn] = true;
+                expanded.push({ id: fn });
+            }
+        }
+
+        setOptions = expanded;
+    }
+    else {
+        // Attacker mode setOptions often come from external sets; expand meaningful forms from pokedex
+        var expandedAtk = [];
+        var seenAtk = {};
+
+        for (var siA = 0; siA < setOptions.length; siA++) {
+            var baseNameA = setOptions[siA] && setOptions[siA].id;
+            if (!baseNameA) continue;
+
+            var baseResolvedA = raidResolveSpeciesName(baseNameA);
+            if (!baseResolvedA) continue;
+
+            // Always include the provided id as-is (can already be a form)
+            if (!seenAtk[baseResolvedA]) {
+                if (!(RAID_MON_EXCLUSIONS && RAID_MON_EXCLUSIONS.indexOf(baseResolvedA) !== -1)) {
+                    seenAtk[baseResolvedA] = true;
+                    expandedAtk.push({ id: baseResolvedA });
+                }
+            }
+
+            // If it's a base species, add its forms too
+            var formsA = raidExpandPokedexForms(baseResolvedA);
+            if (formsA && formsA.length > 1) {
+                // Only include forms that change typing (keeps the list sane)
+                var bt = (pokedex[baseResolvedA] && pokedex[baseResolvedA].types) ? pokedex[baseResolvedA].types.join('/') : '';
+                for (var fiA = 0; fiA < formsA.length; fiA++) {
+                    var fnA = formsA[fiA];
+                    if (!fnA || seenAtk[fnA]) continue;
+                    var ft = (pokedex[fnA] && pokedex[fnA].types) ? pokedex[fnA].types.join('/') : '';
+                    if (ft && bt && ft !== bt) {
+                        if (RAID_MON_EXCLUSIONS && RAID_MON_EXCLUSIONS.indexOf(fnA) !== -1) continue;
+                        seenAtk[fnA] = true;
+                        expandedAtk.push({ id: fnA });
+                    }
+                }
+            }
+        }
+
+        setOptions = expandedAtk;
+    }
+
     var calcBossDmg = $('#raid-setting-bossdmg').is(':checked');
 
     // Toggle Boss Damage columns (indexes 4-7): always visible in Defender mode
@@ -1200,7 +1305,15 @@ function performCalculations() {
                 var handledFightingPair = false;
 
                 // ability candidates (include pool from monsters.json)
-                var monInfo = RAID_MON_INDEX_RESOLVED ? RAID_MON_INDEX_RESOLVED[raidResolveSpeciesName(attacker.name)] : null;
+                var monKey = raidResolveSpeciesName(attacker.name);
+                if (RAID_MON_INDEX_RESOLVED && monKey && !RAID_MON_INDEX_RESOLVED[monKey]) {
+                    var d2 = monKey.indexOf('-');
+                    if (d2 > 0) {
+                        var b2 = monKey.slice(0, d2);
+                        if (RAID_MON_INDEX_RESOLVED[b2]) monKey = b2;
+                    }
+                }
+                var monInfo = RAID_MON_INDEX_RESOLVED ? RAID_MON_INDEX_RESOLVED[monKey] : null;
                 var abilityCandidates = [];
                 if (attacker.ability) abilityCandidates.push(attacker.ability);
                 // abilities from monsters.json (extra pool / overrides)
@@ -1629,6 +1742,41 @@ function constructDataTable() {
             st.appendChild(document.createTextNode(css));
             document.head.appendChild(st);
         }
+    }, 0);
+    // Inline filter selects: force readable colors on Windows dark theme
+    setTimeout(function () {
+        if (document.getElementById('raid-select-style')) return;
+        var css = '' +
+            '#raid-inline-filters select.bs-btn{ ' +
+            '  background:#1f1f1f !important; ' +
+            '  color:#ffffff !important; ' +
+            '  border:1px solid #666 !important; ' +
+            '  border-radius:4px !important; ' +
+            '  padding:4px 10px !important; ' +
+            '  height:30px !important; ' +
+            '  line-height:22px !important; ' +
+            '}' +
+            '#raid-inline-filters select.bs-btn:focus{ ' +
+            '  outline:2px solid #4c9aff !important; ' +
+            '  outline-offset:1px !important; ' +
+            '}' +
+            // Option styling is respected by most Windows browsers; improves readability in the dropdown list
+            '#raid-inline-filters select.bs-btn option{ ' +
+            '  background:#1f1f1f !important; ' +
+            '  color:#ffffff !important; ' +
+            '}' +
+            '#raid-inline-filters select.bs-btn option:checked{ ' +
+            '  background:#333333 !important; ' +
+            '  color:#ffffff !important; ' +
+            '}' +
+            // Let the UA know we want dark form controls
+            '#raid-inline-filters{ color-scheme: dark; }';
+
+        var st = document.createElement('style');
+        st.id = 'raid-select-style';
+        st.type = 'text/css';
+        st.appendChild(document.createTextNode(css));
+        document.head.appendChild(st);
     }, 0);
     // Raidalculate hover popover styling (Pokepaste block)
     setTimeout(function () {
@@ -2092,6 +2240,25 @@ if (RAID_SETTINGS.useDefItems === undefined) RAID_SETTINGS.useDefItems = true;
                 if (opts.length > 300) opts = opts.slice(0, 300);
                 for (var j = 0; j < opts.length; j++) delete opts[j]._score;
             }
+
+            // Include mons that exist in monsters.json even if the external sets dataset doesn't have them
+            if (RAID_MON_INDEX_RESOLVED) {
+                var seen = {};
+                for (var i = 0; i < opts.length; i++) {
+                    var id = opts[i] && opts[i].id;
+                    if (id) seen[id] = true;
+                }
+
+                for (var k in RAID_MON_INDEX_RESOLVED) {
+                    if (!k || seen[k]) continue;
+                    if (RAID_MON_EXCLUSIONS && RAID_MON_EXCLUSIONS.indexOf(k) !== -1) continue;
+                    var mi = RAID_MON_INDEX_RESOLVED[k];
+                    if (mi && mi.obtainable === false) continue;
+                    seen[k] = true;
+                    opts.push({ id: k });
+                }
+            }
+
 
             RAID_LAST.setOptions = opts;
         })();
