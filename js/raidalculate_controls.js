@@ -948,6 +948,67 @@ function raidSetMoveFilterVisible(isVisible) {
     $('#raid-move-filter-label').toggle(visible);
 }
 
+// Defender-mode ability picker (heuristic): prefers immunities/absorbs vs the boss move types.
+// IMPORTANT: does NOT touch abilityOn; it only selects the ability name.
+function raidPickBestDefenderAbility(speciesName, abilityCandidates, bossMoves) {
+    var cands = (abilityCandidates || []).filter(Boolean);
+    if (!cands.length) return '';
+
+    // Normalize boss move types once
+    var bossTypes = [];
+    try {
+        for (var i = 0; i < (bossMoves || []).length; i++) {
+            var bm = bossMoves[i];
+            var n = bm && bm.name ? bm.name : '';
+            if (!n || n === '(No Move)') continue;
+            var mv = moves && moves[n];
+            var t = mv && (mv.type || mv.t || mv.Type);
+            if (t) bossTypes.push(String(t));
+        }
+    } catch (e) {}
+
+    function hasType(t) {
+        return bossTypes.indexOf(t) !== -1;
+    }
+
+    // Score abilities by how well they answer the boss's move types.
+    function scoreAbility(ab) {
+        var a = String(ab || '');
+        var s = 0;
+
+        // Full negations / absorbs
+        if (a === 'Storm Drain' && hasType('Water')) s += 1000;
+        if (a === 'Water Absorb' && hasType('Water')) s += 1000;
+        if (a === 'Volt Absorb' && hasType('Electric')) s += 1000;
+        if (a === 'Lightning Rod' && hasType('Electric')) s += 1000;
+        if (a === 'Motor Drive' && hasType('Electric')) s += 1000;
+        if (a === 'Flash Fire' && hasType('Fire')) s += 1000;
+        if (a === 'Sap Sipper' && hasType('Grass')) s += 1000;
+        if (a === 'Levitate' && hasType('Ground')) s += 1000;
+
+        // Common defensive reducers
+        if (a === 'Thick Fat' && (hasType('Fire') || hasType('Ice'))) s += 300;
+        if ((a === 'Filter' || a === 'Solid Rock' || a === 'Prism Armor') && bossTypes.length) s += 120;
+        if (a === 'Heatproof' && hasType('Fire')) s += 250;
+        if (a === 'Water Bubble' && hasType('Fire')) s += 250;
+
+        // If none of the above apply, keep it low. (Sticky Hold, etc.)
+        return s;
+    }
+
+    var best = cands[0];
+    var bestS = scoreAbility(best);
+    for (var j = 1; j < cands.length; j++) {
+        var sc = scoreAbility(cands[j]);
+        if (sc > bestS) {
+            bestS = sc;
+            best = cands[j];
+        }
+    }
+
+    return String(best || '');
+}
+
 
 $.fn.DataTable.ColVis.prototype._fnDomColumnButton = function (i) {
     var
@@ -1152,6 +1213,47 @@ function performCalculations() {
 
                     var tank = raidCreatePokemonByName(setOptions[i].id);
                     if (!tank) continue;
+
+                    // Pick best defensive ability (heuristic) before rebuilding
+                    try {
+                        var abilityCandidates = [];
+                        function addAb(a) { if (a && abilityCandidates.indexOf(a) === -1) abilityCandidates.push(a); }
+
+                        // pokedex abilities (covers forms)
+                        var sp0 = pokedex && pokedex[raidResolveSpeciesName(tank.name)];
+                        var ab0 = sp0 && sp0.abilities;
+                        if (ab0) {
+                            if (Array.isArray(ab0)) {
+                                for (var ai0 = 0; ai0 < ab0.length; ai0++) addAb(ab0[ai0]);
+                            } else if (typeof ab0 === 'object') {
+                                Object.keys(ab0).forEach(function (k) { addAb(ab0[k]); });
+                            }
+                        }
+
+                        // monsters.json index abilities (form -> base fallback)
+                        var monKeyD = raidResolveSpeciesName(tank.name);
+                        if (RAID_MON_INDEX_RESOLVED && monKeyD && !RAID_MON_INDEX_RESOLVED[monKeyD]) {
+                            var dsh = monKeyD.indexOf('-');
+                            if (dsh > 0) {
+                                var bse = monKeyD.slice(0, dsh);
+                                if (RAID_MON_INDEX_RESOLVED[bse]) monKeyD = bse;
+                            }
+                        }
+                        var monInfoD = RAID_MON_INDEX_RESOLVED ? RAID_MON_INDEX_RESOLVED[monKeyD] : null;
+                        if (monInfoD && monInfoD.abilities && monInfoD.abilities.length) {
+                            for (var ai1 = 0; ai1 < monInfoD.abilities.length; ai1++) {
+                                var aE = monInfoD.abilities[ai1];
+                                var aN = (typeof aE === 'string') ? aE : (aE && aE.name ? aE.name : '');
+                                addAb(aN);
+                            }
+                        }
+
+                        // include current ability last
+                        addAb(tank.ability);
+
+                        var picked = raidPickBestDefenderAbility(tank.name, abilityCandidates, bossMoves);
+                        if (picked) tank.ability = picked;
+                    } catch (ePick) {}
 
                     tank = raidApplyDefProfile(tank, RAID_SETTINGS.defenderProfile || 'def_neutral', isSpDef);
                     tank = raidApplyDefItems(tank, bossMoves);
@@ -2241,8 +2343,7 @@ if (RAID_SETTINGS.useDefItems === undefined) RAID_SETTINGS.useDefItems = true;
                 for (var j = 0; j < opts.length; j++) delete opts[j]._score;
             }
 
-            // Include mons that exist in monsters.json even if the external sets dataset doesn't have them
-            if (RAID_MON_INDEX_RESOLVED) {
+            if (RAID_SETTINGS && RAID_SETTINGS.mode === 'findDefender' && RAID_MON_INDEX_RESOLVED) {
                 var seen = {};
                 for (var i = 0; i < opts.length; i++) {
                     var id = opts[i] && opts[i].id;
