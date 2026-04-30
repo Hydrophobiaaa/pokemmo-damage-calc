@@ -855,13 +855,13 @@ function calculateFinalModsBWXY(gen, attacker, defender, move, field, desc, isCr
     if (hitCount === void 0) { hitCount = 0; }
     var finalMods = [];
     if (field.defenderSide.isReflect && move.category === 'Physical' && !isCritical) {
-        //TODO: Confirm / Check - Alter Reflect based on defender.isRaidBoss
-        finalMods.push(field.gameType !== 'Singles' ? (gen.num > 5 ? 2732 : 2703) : 2048);
+        // Updated to gen789 values
+        finalMods.push(field.gameType !== 'Singles' ? 2732 : 2048);
         desc.isReflect = true;
     }
     else if (field.defenderSide.isLightScreen && move.category === 'Special' && !isCritical) {
-        //TODO: Confirm / Check - Alter Lightscreen based on defender.isRaidBoss
-        finalMods.push(field.gameType !== 'Singles' ? (gen.num > 5 ? 2732 : 2703) : 2048);
+        // Updated to gen789 values
+        finalMods.push(field.gameType !== 'Singles' ? 2732 : 2048);
         desc.isLightScreen = true;
     }
     if (defender.hasAbility('Multiscale') && defender.curHP() === defender.maxHP() &&

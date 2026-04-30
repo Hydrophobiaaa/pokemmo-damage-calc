@@ -559,7 +559,7 @@ function getFinalDamage(baseAmount, i, effectiveness, isBurned, stabMod, finalMo
     damageAmount = Math.floor(OF32(pokeRound(damageAmount) * effectiveness));
     if (isBurned)
         if (isRaidBoss) {
-            damageAmount = Math.floor((damageAmount / 13) * 10);
+            damageAmount = pokeRound((damageAmount / 4) * 3);
         }else {
             damageAmount = Math.floor(damageAmount / 2);
         }
